@@ -1,6 +1,7 @@
 package device
 
 import (
+    "bufio"
     "fmt"
     "os"
     "os/exec"
@@ -239,68 +240,100 @@ func (s *NetMDService) Upload(filePath, title string, format UploadFormat, progr
 }
 
 func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<- TransferProgress) error {
-    if s.md == nil {
-        defer close(progress)
-        return fmt.Errorf("not connected")
+    defer close(progress)
+
+    // Close our USB connection so the Node.js helper can claim it
+    if s.md != nil {
+        s.md.Close()
+        s.md = nil
+        s.connected = false
     }
 
-    // Get track info to estimate sector count
-    length, err := s.md.RequestTrackLength(trackIndex)
+    progress <- TransferProgress{Phase: "downloading"}
+
+    // Find the download helper script
+    scriptPath, err := findDownloadScript()
     if err != nil {
-        defer close(progress)
-        return fmt.Errorf("failed to get track length: %w", err)
+        return err
     }
-    enc, err := s.md.RequestTrackEncoding(trackIndex)
+
+    // Run: node scripts/download.mjs <trackIndex> <destPath>
+    cmd := exec.Command("node", scriptPath,
+        fmt.Sprintf("%d", trackIndex), destPath)
+
+    stderr, err := cmd.StderrPipe()
     if err != nil {
-        defer close(progress)
-        return fmt.Errorf("failed to get track encoding: %w", err)
+        return fmt.Errorf("failed to create pipe: %w", err)
     }
 
-    totalSectors := netmd.EstimateSectors(int(length), enc)
+    if err := cmd.Start(); err != nil {
+        return fmt.Errorf("failed to start download helper: %w", err)
+    }
 
-    // Download via exploit
-    dlProgress := make(chan netmd.DownloadProgress)
-    done := make(chan downloadResult, 1)
-
-    go func() {
-        data, err := s.md.DownloadTrack(trackIndex, totalSectors, dlProgress)
-        done <- downloadResult{data: data, err: err}
-    }()
-
-    // Forward progress
-    go func() {
-        for p := range dlProgress {
-            pct := int64(0)
-            total := int64(totalSectors)
-            if total > 0 {
-                pct = int64(p.Sector)
+    // Parse progress from stderr
+    scanner := bufio.NewScanner(stderr)
+    for scanner.Scan() {
+        line := scanner.Text()
+        if strings.HasPrefix(line, "PROGRESS: reading ") {
+            pctStr := strings.TrimPrefix(line, "PROGRESS: reading ")
+            if pct, e := fmt.Sscanf(pctStr, "%d"); e == nil && pct > 0 {
+                // Rough progress
             }
             progress <- TransferProgress{
-                BytesSent:  pct,
-                TotalBytes: total,
-                Phase:      p.Phase,
+                Phase: "reading",
             }
+        } else if strings.HasPrefix(line, "PROGRESS: ") {
+            phase := strings.TrimPrefix(line, "PROGRESS: ")
+            progress <- TransferProgress{Phase: phase}
+        } else if strings.HasPrefix(line, "ERROR: ") {
+            return fmt.Errorf("download helper: %s", strings.TrimPrefix(line, "ERROR: "))
         }
-    }()
-
-    result := <-done
-    close(progress)
-
-    if result.err != nil {
-        return fmt.Errorf("download failed: %w", result.err)
     }
 
-    // Write raw ATRAC data to file
-    if err := netmd.WriteRawFile(destPath, result.data); err != nil {
-        return fmt.Errorf("failed to write file: %w", err)
+    if err := cmd.Wait(); err != nil {
+        return fmt.Errorf("download helper failed: %w", err)
     }
+
+    // Reconnect to device
+    s.reconnect()
 
     return nil
 }
 
-type downloadResult struct {
-    data []byte
-    err  error
+func (s *NetMDService) reconnect() {
+    md, err := netmd.NewNetMD(0, s.debug)
+    if err != nil {
+        return
+    }
+    s.md = md
+    s.connected = true
+    s.name = md.DeviceName()
+}
+
+func findDownloadScript() (string, error) {
+    // Look for the script relative to the executable
+    candidates := []string{
+        "scripts/download.mjs",
+        "../scripts/download.mjs",
+    }
+
+    // Also check relative to the executable path
+    if exe, err := os.Executable(); err == nil {
+        dir := filepath.Dir(exe)
+        candidates = append(candidates,
+            filepath.Join(dir, "scripts", "download.mjs"),
+            filepath.Join(dir, "..", "scripts", "download.mjs"),
+        )
+    }
+
+    for _, path := range candidates {
+        if _, err := os.Stat(path); err == nil {
+            abs, _ := filepath.Abs(path)
+            return abs, nil
+        }
+    }
+
+    return "", fmt.Errorf("download helper script not found — run 'npm install' in scripts/ directory")
 }
 
 func (s *NetMDService) RenameTrack(index int, title string) error {

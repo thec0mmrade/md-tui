@@ -33,6 +33,8 @@ Initial release.
 - Factory mode commands: `EnterFactoryMode()`, `ReadFirmware()`, `factoryReceive()` with adaptive request routing
 - DRAM patching: 37-command firmware patch sequence (`PatchFirmware()`) enables exploit sector reading
 - 16-bit poll size fix: `poll()` now reads `buf[2] | buf[3]<<8` for responses >255 bytes
+- Track download via Node.js bridge: extracts ATRAC audio from disc using netmd-exploits exploit engine
+- Download output: ATRAC3 WAV file (convertible to PCM WAV via ffmpeg)
 
 ### Fixed (vendored go-netmd-lib)
 - USB device reset required before communication (MZ-N505 control transfers time out otherwise)

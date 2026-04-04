@@ -1,0 +1,11 @@
+{
+  "name": "md-tui-download",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "netmd-js": "^4.3.0",
+    "netmd-exploits": "^0.5.12",
+    "usb": "^2.13.0"
+  }
+}

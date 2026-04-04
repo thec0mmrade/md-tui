@@ -16,6 +16,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
 - **Delete** individual tracks
 - **Move** tracks to reorder
 - **Wipe** entire disc
+- **Download/rip tracks** — extract audio from disc via exploit-based download (requires Node.js)
 - **Disc info** — used/free/total time, write-protection status
 
 ## Requirements
@@ -26,6 +27,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
   - macOS: `brew install libusb`
 - **ffmpeg** (for uploading MP3, FLAC, and other non-WAV formats)
 - **atracdenc** (optional, for LP2 uploads — [github.com/dcherednik/atracdenc](https://github.com/dcherednik/atracdenc))
+- **Node.js 18+** (optional, for track download/ripping — run `npm install` in `scripts/` directory)
 - **Go 1.21+** (to build from source)
 
 ### Linux udev rules
