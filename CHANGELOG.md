@@ -28,6 +28,11 @@ Initial release.
 - Format selector (SP/LP2) in single upload title screen and batch confirm screen
 - Error banners auto-dismiss after 5 seconds
 - Responsive layout: terminal resize updates all views including file browser panes
+- Playback control commands: play, pause, stop, goto track, get position
+- Track download exploit: factory mode init, firmware read, DRAM patching sequence decoded from USB pcap
+- Factory mode commands: `EnterFactoryMode()`, `ReadFirmware()`, `factoryReceive()` with adaptive request routing
+- DRAM patching: 37-command firmware patch sequence (`PatchFirmware()`) enables exploit sector reading
+- 16-bit poll size fix: `poll()` now reads `buf[2] | buf[3]<<8` for responses >255 bytes
 
 ### Fixed (vendored go-netmd-lib)
 - USB device reset required before communication (MZ-N505 control transfers time out otherwise)

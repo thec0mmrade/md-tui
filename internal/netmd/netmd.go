@@ -454,8 +454,12 @@ func (md *NetMD) receive(control Control, check []byte, c chan Transfer) ([]byte
 func (md *NetMD) poll() int {
 	buf := make([]byte, 4)
 	md.devs[md.index].Control(gousb.ControlIn|gousb.ControlVendor|gousb.ControlInterface, 0x01, 0, 0, buf)
-	if buf[0] == 0x01 { //&& buf[1] == 0x81
-		return int(buf[2])
+	if buf[0] == 0x01 {
+		h := int(buf[2]) | int(buf[3])<<8
+		if md.debug && h > 255 {
+			log.Printf("poll: buf=%x size=%d (16-bit)", buf, h)
+		}
+		return h
 	}
 	return -1
 }

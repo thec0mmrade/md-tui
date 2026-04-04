@@ -2,7 +2,8 @@
 
 A terminal UI for managing Sony NetMD MiniDisc devices.
 
-![md-tui screenshot](https://github.com/c0mmrade/md-tui/assets/screenshot.png)
+<!-- TODO: add screenshot -->
+<!-- ![md-tui screenshot](screenshot.png) -->
 
 ## Features
 
@@ -41,7 +42,7 @@ Then reload: `sudo udevadm control --reload-rules && sudo udevadm trigger`
 ## Install
 
 ```bash
-git clone https://github.com/c0mmrade/md-tui.git
+git clone https://github.com/thec0mmrade/md-tui.git
 cd md-tui
 go build .
 ```

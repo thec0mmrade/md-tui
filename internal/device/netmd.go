@@ -239,8 +239,68 @@ func (s *NetMDService) Upload(filePath, title string, format UploadFormat, progr
 }
 
 func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<- TransferProgress) error {
-    defer close(progress)
-    return fmt.Errorf("download not yet supported by go-netmd-lib")
+    if s.md == nil {
+        defer close(progress)
+        return fmt.Errorf("not connected")
+    }
+
+    // Get track info to estimate sector count
+    length, err := s.md.RequestTrackLength(trackIndex)
+    if err != nil {
+        defer close(progress)
+        return fmt.Errorf("failed to get track length: %w", err)
+    }
+    enc, err := s.md.RequestTrackEncoding(trackIndex)
+    if err != nil {
+        defer close(progress)
+        return fmt.Errorf("failed to get track encoding: %w", err)
+    }
+
+    totalSectors := netmd.EstimateSectors(int(length), enc)
+
+    // Download via exploit
+    dlProgress := make(chan netmd.DownloadProgress)
+    done := make(chan downloadResult, 1)
+
+    go func() {
+        data, err := s.md.DownloadTrack(trackIndex, totalSectors, dlProgress)
+        done <- downloadResult{data: data, err: err}
+    }()
+
+    // Forward progress
+    go func() {
+        for p := range dlProgress {
+            pct := int64(0)
+            total := int64(totalSectors)
+            if total > 0 {
+                pct = int64(p.Sector)
+            }
+            progress <- TransferProgress{
+                BytesSent:  pct,
+                TotalBytes: total,
+                Phase:      p.Phase,
+            }
+        }
+    }()
+
+    result := <-done
+    close(progress)
+
+    if result.err != nil {
+        return fmt.Errorf("download failed: %w", result.err)
+    }
+
+    // Write raw ATRAC data to file
+    if err := netmd.WriteRawFile(destPath, result.data); err != nil {
+        return fmt.Errorf("failed to write file: %w", err)
+    }
+
+    return nil
+}
+
+type downloadResult struct {
+    data []byte
+    err  error
 }
 
 func (s *NetMDService) RenameTrack(index int, title string) error {
