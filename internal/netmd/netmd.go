@@ -48,7 +48,17 @@ var (
 	ByteArr16 = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 )
 
+// NewNetMDNoReset opens the device without USB reset. Use for exploit
+// operations where Reset clears device state needed by the exploit.
+func NewNetMDNoReset(index int, debug bool) (*NetMD, error) {
+	return newNetMD(index, debug, false)
+}
+
 func NewNetMD(index int, debug bool) (md *NetMD, err error) {
+	return newNetMD(index, debug, true)
+}
+
+func newNetMD(index int, debug bool, doReset bool) (md *NetMD, err error) {
 	md = &NetMD{
 		index: index,
 		debug: debug,
@@ -86,12 +96,15 @@ func NewNetMD(index int, debug bool) (md *NetMD, err error) {
 
 	// Reset the device to put it in a known state before communication.
 	// Without this, control transfers time out on many devices (e.g. MZ-N505).
-	if err = dev.Reset(); err != nil {
-		if debug {
-			log.Printf("Reset failed (non-fatal): %v", err)
+	// Skip reset for exploit operations — Reset clears factory mode state.
+	if doReset {
+		if err = dev.Reset(); err != nil {
+			if debug {
+				log.Printf("Reset failed (non-fatal): %v", err)
+			}
 		}
+		time.Sleep(200 * time.Millisecond)
 	}
-	time.Sleep(200 * time.Millisecond)
 
 	// Set a control transfer timeout — google/gousb defaults to 0 (infinite).
 	// poll() is called in tight loops so this must be short.
