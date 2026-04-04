@@ -1,0 +1,328 @@
+package device
+
+import (
+    "fmt"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "time"
+
+    netmd "github.com/c0mmrade/md-tui/internal/netmd"
+)
+
+type NetMDService struct {
+    debug     bool
+    md        *netmd.NetMD
+    connected bool
+    name      string
+    // Hold the scanned device so we don't close+reopen
+    pendingMD    *netmd.NetMD
+    pendingIndex int
+}
+
+func NewNetMDService(debug bool) *NetMDService {
+    return &NetMDService{debug: debug}
+}
+
+func (s *NetMDService) Scan() (devices []DeviceInfo, err error) {
+    // go-netmd-lib / gousb can panic if libusb is missing or USB fails
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("USB initialization failed (is libusb-1.0 installed?): %v", r)
+            devices = nil
+        }
+    }()
+
+    // Close any previously held pending connection
+    if s.pendingMD != nil {
+        s.pendingMD.Close()
+        s.pendingMD = nil
+    }
+
+    // Try to open device at index 0. NewNetMD opens all matching devices
+    // internally, so if this succeeds there's at least one device.
+    // We keep it open to avoid close+reopen issues with gousb.
+    md, e := netmd.NewNetMD(0, s.debug)
+    if e != nil {
+        // No devices found
+        return nil, nil
+    }
+
+    s.pendingMD = md
+    s.pendingIndex = 0
+    devices = append(devices, DeviceInfo{
+        Index: 0,
+        Name:  md.DeviceName(),
+    })
+    return devices, nil
+}
+
+func (s *NetMDService) Connect(index int) (err error) {
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("USB connection failed: %v", r)
+        }
+    }()
+
+    var md *netmd.NetMD
+
+    // Reuse the pending connection from Scan if indices match
+    if s.pendingMD != nil && s.pendingIndex == index {
+        md = s.pendingMD
+        s.pendingMD = nil
+    } else {
+        // Close pending if different index
+        if s.pendingMD != nil {
+            s.pendingMD.Close()
+            s.pendingMD = nil
+        }
+        var e error
+        md, e = netmd.NewNetMD(index, s.debug)
+        if e != nil {
+            return fmt.Errorf("failed to connect to device %d: %w", index, e)
+        }
+    }
+
+    // Ensure device is ready before issuing commands
+    _ = md.Wait()
+
+    // Check disc is present
+    if diskPresent, e := md.RequestStatus(); e == nil && !diskPresent {
+        md.Close()
+        return fmt.Errorf("no disc in device")
+    }
+
+    s.md = md
+    s.connected = true
+    s.name = s.md.DeviceName()
+    return nil
+}
+
+func (s *NetMDService) Close() {
+    if s.md != nil {
+        s.md.Close()
+        s.md = nil
+    }
+    if s.pendingMD != nil {
+        s.pendingMD.Close()
+        s.pendingMD = nil
+    }
+    s.connected = false
+}
+
+func (s *NetMDService) DeviceName() string {
+    return s.name
+}
+
+func (s *NetMDService) IsConnected() bool {
+    return s.connected
+}
+
+func (s *NetMDService) ListContent() (*Disc, error) {
+    if s.md == nil {
+        return nil, fmt.Errorf("not connected")
+    }
+
+    trackCount, err := s.md.RequestTrackCount()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get track count: %w", err)
+    }
+
+    disc := &Disc{}
+
+    header, err := s.md.RequestDiscHeader()
+    if err == nil {
+        disc.Title = header
+    }
+
+    recorded, total, available, err := s.md.RequestDiscCapacity()
+    if err == nil {
+        disc.UsedSeconds = int(recorded)
+        disc.TotalSeconds = int(total)
+        disc.FreeSeconds = int(available)
+    }
+
+    for i := 0; i < trackCount; i++ {
+        track := Track{Index: i, Channels: 2}
+
+        title, err := s.md.RequestTrackTitle(i)
+        if err == nil {
+            track.Title = title
+        }
+
+        length, err := s.md.RequestTrackLength(i)
+        if err == nil {
+            track.Duration = time.Duration(length) * time.Second
+        }
+
+        enc, err := s.md.RequestTrackEncoding(i)
+        if err == nil {
+            switch enc {
+            case netmd.EncSP:
+                track.Encoding = EncodingSP
+            case netmd.EncLP2:
+                track.Encoding = EncodingLP2
+            case netmd.EncLP4:
+                track.Encoding = EncodingLP4
+            }
+        }
+
+        disc.Tracks = append(disc.Tracks, track)
+    }
+
+    return disc, nil
+}
+
+func (s *NetMDService) Upload(filePath, title string, format UploadFormat, progress chan<- TransferProgress) error {
+    if s.md == nil {
+        return fmt.Errorf("not connected")
+    }
+    defer close(progress)
+
+    // Convert non-WAV files to WAV via ffmpeg
+    wavPath := filePath
+    if needsConversion(filePath) {
+        progress <- TransferProgress{Phase: "converting"}
+        tmp, err := convertToWAV(filePath)
+        if err != nil {
+            return err
+        }
+        defer os.Remove(tmp)
+        wavPath = tmp
+    }
+
+    // Encode to ATRAC3 for LP2 uploads
+    if format == FormatLP2 {
+        progress <- TransferProgress{Phase: "encoding LP2"}
+        atracPath, err := convertToATRAC3(wavPath)
+        if err != nil {
+            return err
+        }
+        defer os.Remove(atracPath)
+        wavPath = atracPath
+    }
+
+    track, err := s.md.NewTrack(title, wavPath)
+    if err != nil {
+        return fmt.Errorf("failed to create track: %w", err)
+    }
+
+    totalBytes := track.TotalBytes()
+
+    ch := make(chan netmd.Transfer)
+    go s.md.Send(track, ch)
+
+    for t := range ch {
+        if t.Error != nil {
+            return fmt.Errorf("transfer error: %w", t.Error)
+        }
+        switch t.Type {
+        case netmd.TtSetup:
+            progress <- TransferProgress{Phase: "setup", TotalBytes: int64(totalBytes)}
+        case netmd.TtSend:
+            progress <- TransferProgress{
+                BytesSent:  int64(t.Transferred),
+                TotalBytes: int64(totalBytes),
+                Phase:      "sending",
+            }
+        case netmd.TtTrack:
+            progress <- TransferProgress{
+                BytesSent:  int64(totalBytes),
+                TotalBytes: int64(totalBytes),
+                Phase:      "finalizing",
+            }
+        }
+    }
+
+    return nil
+}
+
+func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<- TransferProgress) error {
+    defer close(progress)
+    return fmt.Errorf("download not yet supported by go-netmd-lib")
+}
+
+func (s *NetMDService) RenameTrack(index int, title string) error {
+    if s.md == nil {
+        return fmt.Errorf("not connected")
+    }
+    return s.md.SetTrackTitle(index, title, false)
+}
+
+func (s *NetMDService) RenameDisc(title string) error {
+    if s.md == nil {
+        return fmt.Errorf("not connected")
+    }
+    return s.md.SetDiscHeader(title)
+}
+
+func (s *NetMDService) DeleteTrack(index int) error {
+    if s.md == nil {
+        return fmt.Errorf("not connected")
+    }
+    return s.md.EraseTrack(index)
+}
+
+func (s *NetMDService) MoveTrack(from, to int) error {
+    if s.md == nil {
+        return fmt.Errorf("not connected")
+    }
+    return s.md.MoveTrack(from, to)
+}
+
+func (s *NetMDService) WipeDisc() error {
+    if s.md == nil {
+        return fmt.Errorf("not connected")
+    }
+    count, err := s.md.RequestTrackCount()
+    if err != nil {
+        return err
+    }
+    for i := count - 1; i >= 0; i-- {
+        if err := s.md.EraseTrack(i); err != nil {
+            return fmt.Errorf("failed to erase track %d: %w", i, err)
+        }
+    }
+    return s.md.SetDiscHeader("")
+}
+
+func needsConversion(path string) bool {
+    ext := strings.ToLower(filepath.Ext(path))
+    return ext != ".wav"
+}
+
+func convertToWAV(src string) (string, error) {
+    if _, err := exec.LookPath("ffmpeg"); err != nil {
+        return "", fmt.Errorf("ffmpeg not found — install ffmpeg to upload non-WAV files")
+    }
+    tmp, err := os.CreateTemp("", "md-tui-*.wav")
+    if err != nil {
+        return "", fmt.Errorf("failed to create temp file: %w", err)
+    }
+    tmp.Close()
+    cmd := exec.Command("ffmpeg", "-i", src, "-ar", "44100",
+        "-sample_fmt", "s16", "-ac", "2", "-y", tmp.Name())
+    if out, err := cmd.CombinedOutput(); err != nil {
+        os.Remove(tmp.Name())
+        return "", fmt.Errorf("ffmpeg conversion failed: %w\n%s", err, out)
+    }
+    return tmp.Name(), nil
+}
+
+func convertToATRAC3(src string) (string, error) {
+    if _, err := exec.LookPath("atracdenc"); err != nil {
+        return "", fmt.Errorf("atracdenc not found — install atracdenc for LP2 uploads")
+    }
+    tmp, err := os.CreateTemp("", "md-tui-lp2-*.wav")
+    if err != nil {
+        return "", fmt.Errorf("failed to create temp file: %w", err)
+    }
+    tmp.Close()
+    cmd := exec.Command("atracdenc", "-e", "atrac3", "-i", src, "-o", tmp.Name())
+    if out, err := cmd.CombinedOutput(); err != nil {
+        os.Remove(tmp.Name())
+        return "", fmt.Errorf("atracdenc encoding failed: %w\n%s", err, out)
+    }
+    return tmp.Name(), nil
+}
