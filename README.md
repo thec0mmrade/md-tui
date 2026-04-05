@@ -19,6 +19,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
 - **Wipe** entire disc
 - **Download/rip tracks** — extract audio from disc via native exploit-based download (no external dependencies)
 - **Disc info** — used/free/total time, write-protection status
+- **Color themes** — 7 built-in themes (Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord)
 
 ## Requirements
 
@@ -69,6 +70,7 @@ go build .
 | `m` | Move selected track |
 | `W` | Wipe disc |
 | `x` | Extract/download track |
+| `t/T` | Next/previous color theme |
 | `j/k` `↑/↓` | Navigate |
 | `?` | Toggle help |
 | `q` | Quit |

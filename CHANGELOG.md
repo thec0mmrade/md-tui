@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-04-05
+
+### Added
+- 7 built-in color themes: Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord
+  - Press `t` to cycle forward, `T` to cycle backward
+  - Theme name shown in status bar on switch
+  - All views update immediately (colors, borders, selections, logo)
+
 ## 0.2.0 — 2026-04-05
 
 ### Added

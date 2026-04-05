@@ -53,6 +53,7 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
 - **All mutations** (rename, delete, move, wipe, upload) trigger `refreshDisc()` to reload disc contents
 - **Error banners** auto-dismiss after 5 seconds via `tea.Tick`
 - **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2) → NewTrack → Send
+- **Theme system**: 7 built-in palettes defined in `theme.go` as `Palette` structs. `Apply()` reassigns all color vars and recomputes all style vars. Views read `theme.*` on each `View()` call so changes take effect immediately. `CycleTheme()` cycles through palettes via `t`/`T` keybindings. Logo cache invalidated via `LogoCacheBuster`.
 
 ### Vendored netmd Fixes (internal/netmd/)
 

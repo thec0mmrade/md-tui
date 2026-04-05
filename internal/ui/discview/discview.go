@@ -51,18 +51,6 @@ func New(width, height int) Model {
         table.WithFocused(true),
     )
 
-    s := table.DefaultStyles()
-    s.Header = s.Header.
-        BorderStyle(lipgloss.NormalBorder()).
-        BorderForeground(theme.SubtleColor).
-        BorderBottom(true).
-        Bold(true)
-    s.Selected = s.Selected.
-        Foreground(lipgloss.Color("#000000")).
-        Background(theme.AccentColor).
-        Bold(true)
-    t.SetStyles(s)
-
     m := Model{
         table:  t,
         width:  width,
@@ -147,6 +135,19 @@ func (m Model) View() string {
         return "  Loading disc content..."
     }
 
+    // Refresh table styles for theme changes
+    s := table.DefaultStyles()
+    s.Header = s.Header.
+        BorderStyle(lipgloss.NormalBorder()).
+        BorderForeground(theme.SubtleColor).
+        BorderBottom(true).
+        Bold(true)
+    s.Selected = s.Selected.
+        Foreground(lipgloss.Color("#000000")).
+        Background(theme.AccentColor).
+        Bold(true)
+    m.table.SetStyles(s)
+
     tableWidth := m.tableWidth()
     infoWidth := m.width - tableWidth - 5
 
@@ -230,6 +231,7 @@ func (m Model) renderShortHelp() string {
         k("m") + d("ove ") +
         k("R") + d("ename disc ") +
         k("W") + d("ipe  ") +
+        k("t") + d("heme ") +
         k("?") + d("help ") +
         k("q") + d("uit")
 }
@@ -240,7 +242,8 @@ func (m Model) renderFullHelp() string {
     lines := []string{
         d("  ") + k("↑/k") + d(" up  ") + k("↓/j") + d(" down  ") + k("g") + d(" top  ") + k("G") + d(" bottom"),
         d("  ") + k("u") + d(" upload  ") + k("x") + d(" extract/download  ") + k("r") + d(" rename track  ") + k("R") + d(" rename disc"),
-        d("  ") + k("d") + d(" delete  ") + k("m") + d(" move  ") + k("W") + d(" wipe disc  ") + k("?") + d(" close help  ") + k("q") + d(" quit"),
+        d("  ") + k("d") + d(" delete  ") + k("m") + d(" move  ") + k("W") + d(" wipe disc"),
+        d("  ") + k("t") + d(" next theme  ") + k("T") + d(" prev theme  ") + k("?") + d(" close help  ") + k("q") + d(" quit"),
     }
     return strings.Join(lines, "\n")
 }
@@ -315,9 +318,10 @@ func formatDuration(d interface{ Minutes() float64 }) string {
 
 var miniDiscLogoCache string
 var miniDiscLogoCacheWidth int
+var miniDiscLogoCacheGen int
 
 func renderMiniDiscLogo(maxWidth int) string {
-    if miniDiscLogoCache != "" && miniDiscLogoCacheWidth == maxWidth {
+    if miniDiscLogoCache != "" && miniDiscLogoCacheWidth == maxWidth && miniDiscLogoCacheGen == theme.LogoCacheBuster {
         return miniDiscLogoCache
     }
 
@@ -387,6 +391,7 @@ func renderMiniDiscLogo(maxWidth int) string {
 
     miniDiscLogoCache = b.String()
     miniDiscLogoCacheWidth = maxWidth
+    miniDiscLogoCacheGen = theme.LogoCacheBuster
     return miniDiscLogoCache
 }
 

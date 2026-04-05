@@ -135,6 +135,20 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             return a, tea.Quit
         }
 
+        // Theme switching (works from any non-modal view)
+        if key.Matches(msg, theme.Keys.ThemeNext) {
+            name := theme.CycleTheme(true)
+            a.statusBar.Message = "Theme: " + name
+            a.spinner.Style = lipgloss.NewStyle().Foreground(theme.AccentColor)
+            return a, nil
+        }
+        if key.Matches(msg, theme.Keys.ThemePrev) {
+            name := theme.CycleTheme(false)
+            a.statusBar.Message = "Theme: " + name
+            a.spinner.Style = lipgloss.NewStyle().Foreground(theme.AccentColor)
+            return a, nil
+        }
+
         switch a.state {
         case ViewDeviceSelect:
             if key.Matches(msg, theme.Keys.Rescan) {

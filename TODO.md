@@ -3,6 +3,12 @@
 ## Features
 
 - [ ] **LP4 support** — Quarter capacity vs SP, if atracdenc supports ATRAC3 LP4 encoding
+- [ ] **Download output format** — Wrap raw ATRAC data in WAV container or auto-convert to PCM via ffmpeg
+- [ ] **More device support** — Exploit constants are MZ-N505-specific; other Type-R/S/Hi-MD devices need different firmware addresses from netmd-exploits device tables
+- [ ] **Exploit cleanup/unpatch** — Add firmware unpatch sequence so device recovers without battery pull after failed downloads
+- [x] ~~UI themes~~ — 7 built-in themes (Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord), cycle with t/T
+- [ ] **Animations** — Disc spinning animation, progress bar effects, transitions between views
+- [ ] **Arbitrary file storage** — Encode any file (images, documents, etc.) into ATRAC audio for upload, decode back on download. Enables using MiniDisc as a data storage medium
 
 ## Completed
 
