@@ -35,6 +35,7 @@ Initial release.
 - 16-bit poll size fix: `poll()` now reads `buf[2] | buf[3]<<8` for responses >255 bytes
 - Track download via Node.js bridge: extracts ATRAC audio from disc using netmd-exploits exploit engine
 - Download output: ATRAC3 WAV file (convertible to PCM WAV via ffmpeg)
+- Auto-set disc title to folder name after batch upload
 - Fixed download dialog hanging after completion (Node.js exploit cleanup was blocking process exit)
 
 ### Fixed (vendored go-netmd-lib)

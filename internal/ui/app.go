@@ -231,6 +231,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             path, title, format := a.uploadView.GetUploadParams()
             return a, a.startUpload(path, title, format)
         }
+        // Batch complete — set disc title to folder name
+        if a.uploadView.IsBatchMode() {
+            dirName := a.uploadView.BatchDirName()
+            a.uploadView.Close()
+            return a, tea.Batch(a.renameDisc(dirName), a.refreshDisc())
+        }
         a.uploadView.Close()
         return a, a.refreshDisc()
 

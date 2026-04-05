@@ -163,6 +163,14 @@ func (m *Model) QueueStatus() string {
     return fmt.Sprintf("Track %d / %d", m.queueIdx+1, len(m.queue))
 }
 
+func (m *Model) IsBatchMode() bool {
+    return m.batchMode
+}
+
+func (m *Model) BatchDirName() string {
+    return filepath.Base(m.selectedDir)
+}
+
 func (m *Model) CurrentTrackName() string {
     if m.batchMode && m.queueIdx < len(m.queue) {
         return m.queue[m.queueIdx].Title
