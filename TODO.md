@@ -6,7 +6,7 @@
 
 - [ ] **Stop batch after current track** — Press Esc during batch upload to stop after the current track finishes, keeping tracks already written
 - [ ] **Group management** — Create, rename, and delete track groups (protocol library has Root/Group support)
-- [x] ~~Auto-set disc title from folder name~~
+- [x] ~~Auto-set disc title from folder name~~ — verified working
 - [ ] **LP4 support** — Quarter capacity vs SP, if atracdenc supports ATRAC3 LP4 encoding
 
 ## Completed

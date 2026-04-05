@@ -36,7 +36,11 @@ Initial release.
 - Track download via Node.js bridge: extracts ATRAC audio from disc using netmd-exploits exploit engine
 - Download output: ATRAC3 WAV file (convertible to PCM WAV via ffmpeg)
 - Auto-set disc title to folder name after batch upload
+- Auto-set disc title to folder name after batch upload
 - Fixed download dialog hanging after completion (Node.js exploit cleanup was blocking process exit)
+- Fixed double-close panic in send.go during upload errors
+- Fixed time display showing raw seconds as minutes (now shows h:mm:ss)
+- Fixed concurrent USB commands during batch rename + refresh
 
 ### Fixed (vendored go-netmd-lib)
 - USB device reset required before communication (MZ-N505 control transfers time out otherwise)
