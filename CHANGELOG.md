@@ -36,6 +36,7 @@ Initial release.
 - Track download via Node.js bridge: extracts ATRAC audio from disc using netmd-exploits exploit engine
 - Download output: ATRAC3 WAV file (convertible to PCM WAV via ffmpeg)
 - Auto-set disc title to folder name after batch upload
+- MiniDisc logo rendered as dithered half-block art in disc info panel
 - Auto-set disc title to folder name after batch upload
 - Fixed download dialog hanging after completion (Node.js exploit cleanup was blocking process exit)
 - Fixed double-close panic in send.go during upload errors

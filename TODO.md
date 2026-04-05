@@ -8,7 +8,7 @@
 - [ ] **Group management** — Create, rename, and delete track groups (protocol library has Root/Group support)
 - [x] ~~Auto-set disc title from folder name~~ — verified working
 - [ ] **LP4 support** — Quarter capacity vs SP, if atracdenc supports ATRAC3 LP4 encoding
-- [ ] **MiniDisc logo in UI** — Display a dithered/ASCII art version of the MiniDisc logo on the right side of the disc view (below or in place of disc info panel). Source image at `/home/c0mmrade/Downloads/Mini_Disc.png`
+- [x] ~~MiniDisc logo in UI~~ — dithered half-block character rendering from PNG
 
 ## Completed
 
