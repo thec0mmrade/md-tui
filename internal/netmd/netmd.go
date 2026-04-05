@@ -11,12 +11,14 @@ import (
 )
 
 type NetMD struct {
-	debug bool
-	index int
-	devs  []*gousb.Device
-	ctx   *gousb.Context
-	out   *gousb.OutEndpoint
-	ekb   *EKB
+	debug  bool
+	index  int
+	devs   []*gousb.Device
+	ctx    *gousb.Context
+	out    *gousb.OutEndpoint
+	ekb    *EKB
+	config *gousb.Config
+	intf   *gousb.Interface
 }
 
 type Encoding byte
@@ -146,6 +148,8 @@ func newNetMD(index int, debug bool, doReset bool) (md *NetMD, err error) {
 						log.Printf("OUT endpoint: %s", endpointDesc)
 					}
 					foundOut = true
+					md.config = config
+					md.intf = intf
 				}
 			}
 			// Do NOT close config here — it invalidates the endpoint handles
@@ -181,6 +185,15 @@ func (md *NetMD) DeviceName() string {
 func (md *NetMD) Close() {
 	if md == nil {
 		return
+	}
+	// Release interface and config before closing device
+	if md.intf != nil {
+		md.intf.Close()
+		md.intf = nil
+	}
+	if md.config != nil {
+		md.config.Close()
+		md.config = nil
 	}
 	for _, d := range md.devs {
 		if d != nil {

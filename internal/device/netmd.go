@@ -247,6 +247,8 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
         s.md.Close()
         s.md = nil
         s.connected = false
+        // Give the OS time to release the USB device
+        time.Sleep(2 * time.Second)
     }
 
     progress <- TransferProgress{Phase: "downloading"}
@@ -266,32 +268,45 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
         return fmt.Errorf("failed to create pipe: %w", err)
     }
 
+    // Capture ALL stderr for error reporting
+    var stderrBuf strings.Builder
     if err := cmd.Start(); err != nil {
         return fmt.Errorf("failed to start download helper: %w", err)
     }
 
     // Parse progress from stderr
+    var lastError string
     scanner := bufio.NewScanner(stderr)
     for scanner.Scan() {
         line := scanner.Text()
+        stderrBuf.WriteString(line + "\n")
         if strings.HasPrefix(line, "PROGRESS: reading ") {
             pctStr := strings.TrimPrefix(line, "PROGRESS: reading ")
-            if pct, e := fmt.Sscanf(pctStr, "%d"); e == nil && pct > 0 {
-                // Rough progress
-            }
+            var pct int
+            fmt.Sscanf(pctStr, "%d", &pct)
             progress <- TransferProgress{
-                Phase: "reading",
+                BytesSent:  int64(pct),
+                TotalBytes: 100,
+                Phase:      "reading",
             }
         } else if strings.HasPrefix(line, "PROGRESS: ") {
             phase := strings.TrimPrefix(line, "PROGRESS: ")
             progress <- TransferProgress{Phase: phase}
         } else if strings.HasPrefix(line, "ERROR: ") {
-            return fmt.Errorf("download helper: %s", strings.TrimPrefix(line, "ERROR: "))
+            lastError = strings.TrimPrefix(line, "ERROR: ")
         }
     }
 
     if err := cmd.Wait(); err != nil {
-        return fmt.Errorf("download helper failed: %w", err)
+        if lastError != "" {
+            return fmt.Errorf("%s", lastError)
+        }
+        // Show full stderr for debugging
+        errOutput := stderrBuf.String()
+        if len(errOutput) > 200 {
+            errOutput = errOutput[:200]
+        }
+        return fmt.Errorf("download failed: %s", strings.TrimSpace(errOutput))
     }
 
     // Reconnect to device
@@ -311,18 +326,22 @@ func (s *NetMDService) reconnect() {
 }
 
 func findDownloadScript() (string, error) {
-    // Look for the script relative to the executable
     candidates := []string{
         "scripts/download.mjs",
-        "../scripts/download.mjs",
     }
 
-    // Also check relative to the executable path
+    // Check relative to executable
     if exe, err := os.Executable(); err == nil {
         dir := filepath.Dir(exe)
         candidates = append(candidates,
             filepath.Join(dir, "scripts", "download.mjs"),
-            filepath.Join(dir, "..", "scripts", "download.mjs"),
+        )
+    }
+
+    // Check relative to working directory
+    if wd, err := os.Getwd(); err == nil {
+        candidates = append(candidates,
+            filepath.Join(wd, "scripts", "download.mjs"),
         )
     }
 
@@ -333,7 +352,7 @@ func findDownloadScript() (string, error) {
         }
     }
 
-    return "", fmt.Errorf("download helper script not found — run 'npm install' in scripts/ directory")
+    return "", fmt.Errorf("download script not found — ensure scripts/download.mjs exists and run 'npm install' in scripts/")
 }
 
 func (s *NetMDService) RenameTrack(index int, title string) error {
