@@ -242,15 +242,60 @@ func (s *NetMDService) Upload(filePath, title string, format UploadFormat, progr
 func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<- TransferProgress) error {
     defer close(progress)
 
-    // Close our USB connection so the Node.js helper can claim it
-    if s.md != nil {
-        s.md.Close()
-        s.md = nil
-        s.connected = false
-        // Give the OS time to release the USB device
-        time.Sleep(2 * time.Second)
+    if s.md == nil {
+        return fmt.Errorf("not connected")
     }
 
+    // Try native exploit download first
+    err := s.downloadNative(trackIndex, destPath, progress)
+    if err == nil {
+        return nil
+    }
+
+    // Native failed — fall back to Node.js bridge
+    // Need to reconnect first since native download may have left device in bad state
+    s.md.Close()
+    s.md = nil
+    s.connected = false
+    time.Sleep(2 * time.Second)
+
+    return s.downloadJS(trackIndex, destPath, progress)
+}
+
+func (s *NetMDService) downloadNative(trackIndex int, destPath string, progress chan<- TransferProgress) error {
+    length, err := s.md.RequestTrackLength(trackIndex)
+    if err != nil {
+        return fmt.Errorf("failed to get track length: %w", err)
+    }
+    enc, err := s.md.RequestTrackEncoding(trackIndex)
+    if err != nil {
+        return fmt.Errorf("failed to get track encoding: %w", err)
+    }
+
+    totalSectors := netmd.EstimateSectors(int(length), enc)
+
+    progress <- TransferProgress{Phase: "initializing"}
+
+    dlProgress := make(chan netmd.DownloadProgress, 100)
+    go func() {
+        for p := range dlProgress {
+            progress <- TransferProgress{
+                BytesSent:  int64(p.Sector),
+                TotalBytes: int64(totalSectors),
+                Phase:      p.Phase,
+            }
+        }
+    }()
+
+    data, err := s.md.DownloadTrack(trackIndex, totalSectors, dlProgress)
+    if err != nil {
+        return err
+    }
+
+    return netmd.WriteRawFile(destPath, data)
+}
+
+func (s *NetMDService) downloadJS(trackIndex int, destPath string, progress chan<- TransferProgress) error {
     progress <- TransferProgress{Phase: "downloading"}
 
     // Find the download helper script
