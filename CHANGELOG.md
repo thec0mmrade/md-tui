@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0 — 2026-04-05
+
+### Added
+- Native exploit-based track download — no longer requires Node.js/npm
+  - CachedSectorNoRamControlDownload exploit implemented in pure Go
+  - ARM code execution on device reads ATRAC sectors from anti-shock DRAM buffer
+  - Automatic fallback to Node.js bridge if native exploit fails
+- Factory write commands now include CRC16-CCITT checksums (required by device for patch peripheral writes)
+
+### Fixed
+- Firmware patch writes to hardware patch peripheral were silently rejected (missing CRC16 checksums)
+- Exploit ARM code crashed device due to missing `g_DiscStateStruct` parameter (4 DWORDs required after bytecode, not 3)
+- Exploit response reads failed when using poll — hooked firmware handler bypasses normal poll mechanism; now reads directly via USB request 0x81
+- Exploit activation command (`18 d3`) moved after DRAM patches so it executes via the installed hook instead of being echoed
+- Disc cache now pre-filled via Play() before entering factory mode (cache must be populated for exploit reads to return audio data)
+- `crc16ccitt()` had incorrect algorithm (replaced crc instead of XOR-ing with temp)
+
 ## 0.1.0 — 2026-04-04
 
 Initial release.

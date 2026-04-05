@@ -17,7 +17,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
 - **Delete** individual tracks
 - **Move** tracks to reorder
 - **Wipe** entire disc
-- **Download/rip tracks** — extract audio from disc via exploit-based download (requires Node.js)
+- **Download/rip tracks** — extract audio from disc via native exploit-based download (no external dependencies)
 - **Disc info** — used/free/total time, write-protection status
 
 ## Requirements
@@ -28,7 +28,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
   - macOS: `brew install libusb`
 - **ffmpeg** (for uploading MP3, FLAC, and other non-WAV formats)
 - **atracdenc** (optional, for LP2 uploads — [github.com/dcherednik/atracdenc](https://github.com/dcherednik/atracdenc))
-- **Node.js 18+** (optional, for track download/ripping — run `npm install` in `scripts/` directory)
+- **Node.js 18+** (optional fallback for track download — run `npm install` in `scripts/`; not needed if native exploit works)
 - **Go 1.21+** (to build from source)
 
 ### Linux udev rules
@@ -79,11 +79,20 @@ go build .
 
 Other NetMD devices (MZ-N1, MZ-N707, MZ-N710, MZ-RH1, Sharp IM-DR series, etc.) should work but are untested. Please open an issue if you encounter problems with your device.
 
+## Track Download
+
+Track downloading uses a native implementation of the CachedSectorNoRamControlDownload exploit, which reads ATRAC audio data directly from the device's anti-shock DRAM buffer via ARM code execution. This works without any external dependencies beyond libusb.
+
+If the native exploit fails, md-tui automatically falls back to a Node.js bridge (`scripts/download.mjs`). The fallback requires Node.js 18+ and `npm install` in the `scripts/` directory.
+
+Currently verified on the Sony MZ-N505 (R1.400 firmware). Other Type-R NetMD devices may work but need device-specific firmware constants.
+
 ## Acknowledgments
 
 - [go-netmd-lib](https://github.com/enimatek-nl/go-netmd-lib) — Go NetMD protocol implementation (vendored with fixes)
 - [Charm](https://github.com/charmbracelet) — bubbletea, lipgloss, bubbles TUI libraries
 - [Web MiniDisc Pro](https://github.com/asivery/webminidisc) — reference for NetMD protocol behavior
+- [netmd-exploits](https://github.com/asivery/netmd-exploits) — reference for CachedSectorNoRamControlDownload exploit protocol
 
 ## License
 

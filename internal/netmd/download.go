@@ -20,33 +20,18 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, progress chan<-
 		defer close(progress)
 	}
 
-	// Stop any current playback
+	// Step 1: Fill the disc cache BEFORE factory mode.
+	// The exploit reads ATRAC data from the anti-shock DRAM buffer.
+	// Factory mode operations may prevent normal playback, so we fill
+	// the cache first while the device is in normal operating mode.
 	md.Stop()
 	md.Wait()
 
-	// Enter factory mode (required for exploit commands)
 	if md.debug {
-		log.Println("Entering factory mode...")
+		log.Printf("Navigating to track %d and starting playback...", trackIndex)
 	}
 	if progress != nil {
 		progress <- DownloadProgress{Phase: "initializing"}
-	}
-	if err := md.EnterFactoryMode(); err != nil {
-		return nil, fmt.Errorf("factory mode init: %w", err)
-	}
-
-	// Read firmware block (initializes exploit state on device)
-	if md.debug {
-		log.Println("Reading firmware block...")
-	}
-	_, err := md.ReadFirmwareBlock(0x0000, 0x0930)
-	if err != nil {
-		return nil, fmt.Errorf("firmware read failed: %w", err)
-	}
-
-	// Navigate to track — must happen before firmware patching
-	if md.debug {
-		log.Printf("Navigating to track %d...", trackIndex)
 	}
 	if err := md.GotoTrack(trackIndex); err != nil {
 		return nil, fmt.Errorf("goto track %d: %w", trackIndex, err)
@@ -56,8 +41,40 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, progress chan<-
 			log.Printf("SeekToStart: %v (non-fatal)", err)
 		}
 	}
+	if err := md.Play(); err != nil {
+		if md.debug {
+			log.Printf("Play: %v (non-fatal)", err)
+		}
+	}
 
-	// Patch firmware to enable exploit-based sector reading
+	// Wait for disc to spin up and fill the anti-shock buffer with ATRAC data
+	if md.debug {
+		log.Println("Waiting for disc cache to fill...")
+	}
+	time.Sleep(5 * time.Second)
+
+	// Stop playback before entering factory mode. The disc cache (DRAM)
+	// persists after stopping — but the patched firmware crashes if
+	// playback is active during exploit commands.
+	md.Stop()
+	md.Wait()
+
+	// Step 2: Enter factory mode and patch firmware for exploit reads.
+	if md.debug {
+		log.Println("Entering factory mode...")
+	}
+	if err := md.EnterFactoryMode(); err != nil {
+		return nil, fmt.Errorf("factory mode init: %w", err)
+	}
+
+	if md.debug {
+		log.Println("Reading firmware block...")
+	}
+	_, err := md.ReadFirmwareBlock(0x0000, 0x0930)
+	if err != nil {
+		return nil, fmt.Errorf("firmware read failed: %w", err)
+	}
+
 	if md.debug {
 		log.Println("Patching firmware...")
 	}
@@ -68,8 +85,8 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, progress chan<-
 		return nil, fmt.Errorf("firmware patch failed: %w", err)
 	}
 
-	// Wait for disc to spin up and cache sectors
-	time.Sleep(2 * time.Second)
+	// Brief settle after patching
+	time.Sleep(500 * time.Millisecond)
 
 	// Read sectors
 	if md.debug {

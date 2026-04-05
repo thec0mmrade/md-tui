@@ -42,7 +42,7 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
   - `trackedit/` — Rename modal (track or disc title)
   - `confirm/` — Reusable yes/no confirmation dialog
   - `statusbar/` — Bottom bar with device name and status
-- `scripts/` — Node.js helper for exploit-based track download (`download.mjs`). Requires `npm install`.
+- `scripts/` — Node.js helper for exploit-based track download (`download.mjs`). Fallback when native exploit fails. Requires `npm install`.
 - `assets/` — MiniDisc logo PNG for dithered rendering in disc info panel
 
 ### Key Design Decisions
@@ -65,4 +65,7 @@ The vendored library has critical fixes over upstream `github.com/enimatek-nl/go
 - **Stereo/mono fix** (`track.go:103`): Channel detection was inverted (`!= 1` instead of `== 1`), causing stereo files to be rejected by the device
 - **Switched from forked gousb** to standard `github.com/google/gousb`
 - **Added playback control** (`playback.go`): Play, Pause, Stop, GotoTrack, GetPosition — uses `playbackCommand()` helper to handle 0xff→0x00 check byte mismatch in responses
-- **Added exploit download** (`exploit.go`, `download.go`): CachedSectorNoRamControlDownload exploit — reads ATRAC sectors via ARM code execution on device. Pre-compiled bytecode captured from MZ-N505 USB trace. Command `18 d3 ff` executes ARM code; `18 24 ff` reads firmware; sectors read in 6 chunks of 420+252 bytes = 2352 bytes per sector.
+- **Added exploit download** (`exploit.go`, `exploit_setup.go`, `download.go`): CachedSectorNoRamControlDownload exploit — reads ATRAC sectors via ARM code execution on device. Pre-compiled bytecode captured from MZ-N505 USB trace.
+  - `exploit_setup.go`: 37 pre-captured factory commands that patch the device firmware's USB handler to enable ARM code execution via the hardware patch peripheral at `0x03802000`. CRC16-CCITT checksums are dynamically appended to factory write commands (`18 22`). Activation `18 d3` runs after patches are applied.
+  - `exploit.go`: `ExploitReadSectorChunk` sends `18 d3 ff` + ARM bytecode + 4 LE DWORDs (`g_DiscStateStruct`, sector, subsectorStart, length). Response read directly via `0x81` without polling (hooked handler bypasses poll mechanism). Sectors read in 6 chunks of 416+272 bytes = 2352 bytes per sector.
+  - `download.go`: Orchestrates download — fills disc cache via Play(), then enters factory mode, patches firmware, and reads sectors. Falls back to Node.js bridge on failure.
