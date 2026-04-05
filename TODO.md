@@ -4,7 +4,7 @@
 
 - [ ] **Track download (native exploit)** — Native Go exploit infrastructure built but sector reads return empty data. Kept as future optimization to remove Node.js dependency.
 
-- [ ] **Stop batch after current track** — Press Esc during batch upload to stop after the current track finishes, keeping tracks already written
+- [x] ~~Stop batch after current track~~
 - [ ] **Group management** — Create, rename, and delete track groups (protocol library has Root/Group support)
 - [x] ~~Auto-set disc title from folder name~~ — verified working
 - [ ] **LP4 support** — Quarter capacity vs SP, if atracdenc supports ATRAC3 LP4 encoding

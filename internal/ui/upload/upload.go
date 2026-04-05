@@ -75,9 +75,10 @@ type Model struct {
     height       int
 
     // Batch upload queue
-    queue    []queueItem
-    queueIdx int
-    batchMode bool
+    queue            []queueItem
+    queueIdx         int
+    batchMode        bool
+    stopAfterCurrent bool
 }
 
 func New() Model {
@@ -115,6 +116,7 @@ func (m *Model) Open(width, height int) tea.Cmd {
     m.queue = nil
     m.queueIdx = 0
     m.batchMode = false
+    m.stopAfterCurrent = false
     m.browser = browser.New(width, height-2)
     return m.browser.Init()
 }
@@ -149,7 +151,7 @@ func (m *Model) SetUploading() {
 }
 
 func (m *Model) AdvanceQueue() bool {
-    if !m.batchMode {
+    if !m.batchMode || m.stopAfterCurrent {
         return false
     }
     m.queueIdx++
@@ -192,6 +194,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
             return m.updateTitle(msg)
         case stateBatchConfirm:
             return m.updateBatchConfirm(msg)
+        case stateUploading:
+            if m.batchMode && key.Matches(msg, theme.Keys.Cancel) {
+                m.stopAfterCurrent = true
+            }
+            return m, nil
         case stateDone:
             m.active = false
             if m.err != nil {
@@ -462,9 +469,16 @@ func (m Model) viewProgress() string {
         fmtLabel = "LP2"
     }
 
+    hints := ""
+    if m.batchMode && !m.stopAfterCurrent {
+        hints = "\n\n" + theme.KeyDescStyle.Render("  Esc: stop after current track")
+    } else if m.stopAfterCurrent {
+        hints = "\n\n" + lipgloss.NewStyle().Foreground(theme.WarningColor).Render("  Stopping after this track...")
+    }
+
     return status +
         fmt.Sprintf("  %s (%s)... %.0f%%\n\n", phase, fmtLabel, m.pct*100) +
-        "  " + m.progress.ViewAs(m.pct)
+        "  " + m.progress.ViewAs(m.pct) + hints
 }
 
 func scanAudioFiles(dir string) []queueItem {
