@@ -42,6 +42,8 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
   - `trackedit/` — Rename modal (track or disc title)
   - `confirm/` — Reusable yes/no confirmation dialog
   - `statusbar/` — Bottom bar with device name and status
+- `scripts/` — Node.js helper for exploit-based track download (`download.mjs`). Requires `npm install`.
+- `assets/` — MiniDisc logo PNG for dithered rendering in disc info panel
 
 ### Key Design Decisions
 
