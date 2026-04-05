@@ -231,11 +231,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             path, title, format := a.uploadView.GetUploadParams()
             return a, a.startUpload(path, title, format)
         }
-        // Batch complete — set disc title to folder name
+        // Batch complete — set disc title to folder name, then refresh
         if a.uploadView.IsBatchMode() {
             dirName := a.uploadView.BatchDirName()
             a.uploadView.Close()
-            return a, tea.Batch(a.renameDisc(dirName), a.refreshDisc())
+            return a, a.renameDiscThenRefresh(dirName)
         }
         a.uploadView.Close()
         return a, a.refreshDisc()
@@ -505,6 +505,18 @@ func (a *App) renameDisc(title string) tea.Cmd {
             return ErrorMsg{Err: err}
         }
         return DiscRenamedMsg{}
+    }
+}
+
+func (a *App) renameDiscThenRefresh(title string) tea.Cmd {
+    return func() tea.Msg {
+        // Rename first, then refresh — sequential to avoid USB conflicts
+        a.device.RenameDisc(title)
+        disc, err := a.device.ListContent()
+        if err != nil {
+            return DiscLoadErrorMsg{Err: err}
+        }
+        return DiscLoadedMsg{Disc: disc}
     }
 }
 

@@ -78,7 +78,6 @@ func (md *NetMD) Send(trk *Track, c chan Transfer) {
 			c <- Transfer{
 				Error: err,
 			}
-			close(c)
 			return
 		}
 		dataCounter += t
