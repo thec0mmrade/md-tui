@@ -100,7 +100,8 @@ async function main() {
         console.error('PROGRESS: done');
         console.log(`OK: ${buf.length} bytes written to ${outputPath}`);
 
-        await stateManager.unload(exploitClass);
+        // Exit immediately — unload/cleanup can hang after exploit session
+        process.exit(0);
     } catch (err) {
         console.error(`ERROR: ${err.stack || err.message}`);
         process.exit(1);

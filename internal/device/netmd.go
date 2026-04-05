@@ -309,15 +309,17 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
         return fmt.Errorf("download failed: %s", strings.TrimSpace(errOutput))
     }
 
-    // Reconnect to device
-    s.reconnect()
-
+    // Don't reconnect — device needs replug after exploit session.
+    // The TUI will show "disconnected" until user rescans.
     return nil
 }
 
 func (s *NetMDService) reconnect() {
+    // Wait for device to recover from exploit session
+    time.Sleep(3 * time.Second)
     md, err := netmd.NewNetMD(0, s.debug)
     if err != nil {
+        // Device may need replugging — that's OK
         return
     }
     s.md = md

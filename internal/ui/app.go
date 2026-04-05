@@ -79,7 +79,22 @@ func (a *App) Init() tea.Cmd {
     return tea.Batch(a.scanDevices(), a.spinner.Tick)
 }
 
+// downloadCompleteMsg is handled before anything else to avoid modal interception
+type downloadCompleteMsg struct {
+    err error
+}
+
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    // Handle download completion FIRST — before any modal forwarding
+    if msg, ok := msg.(downloadCompleteMsg); ok {
+        a.downloadView.Close()
+        if msg.err != nil {
+            return a, a.setError(msg.err)
+        }
+        a.statusBar.Message = "Download complete"
+        return a, nil
+    }
+
     switch msg := msg.(type) {
     case tea.WindowSizeMsg:
         a.width = msg.Width
@@ -226,20 +241,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     case download.StartDownloadMsg:
         idx, destPath := a.downloadView.GetDownloadParams()
         a.downloadView.SetDownloading()
-        return a, a.startDownload(idx, destPath)
+        // Run download entirely in background — tea.Cmd would block event loop
+        go func() {
+            progress := make(chan device.TransferProgress, 100)
+            go func() {
+                for p := range progress {
+                    if a.program != nil {
+                        a.program.Send(download.ProgressMsg{Progress: p})
+                    }
+                }
+            }()
+            err := a.device.Download(idx, destPath, progress)
+            if a.program != nil {
+                a.program.Send(downloadCompleteMsg{err: err})
+            }
+        }()
+        return a, nil
 
     case download.ProgressMsg:
         var cmd tea.Cmd
         a.downloadView, cmd = a.downloadView.Update(msg)
         return a, cmd
-
-    case DownloadFailedMsg:
-        a.downloadView.Close()
-        return a, a.setError(msg.Err)
-
-    case download.DoneMsg:
-        a.downloadView.Close()
-        return a, nil
 
     case download.CancelMsg:
         return a, nil
@@ -266,7 +288,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         }
     }
 
-    // Forward all messages to active modal views (not just keys)
+    // Forward non-handled messages to active modal views
     if a.uploadView.IsActive() {
         var cmd tea.Cmd
         a.uploadView, cmd = a.uploadView.Update(msg)
@@ -523,27 +545,3 @@ func (a *App) startUpload(path, title string, format device.UploadFormat) tea.Cm
     }
 }
 
-func (a *App) startDownload(trackIndex int, destPath string) tea.Cmd {
-    return func() tea.Msg {
-        progress := make(chan device.TransferProgress)
-        done := make(chan error, 1)
-
-        go func() {
-            done <- a.device.Download(trackIndex, destPath, progress)
-        }()
-
-        go func() {
-            for p := range progress {
-                if a.program != nil {
-                    a.program.Send(download.ProgressMsg{Progress: p})
-                }
-            }
-        }()
-
-        err := <-done
-        if err != nil {
-            return DownloadFailedMsg{Err: err}
-        }
-        return download.DoneMsg{}
-    }
-}
