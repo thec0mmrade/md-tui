@@ -3,12 +3,15 @@
 ## Features
 
 - [ ] **LP4 support** — Quarter capacity vs SP, if atracdenc supports ATRAC3 LP4 encoding
-- [ ] **Download output format** — Wrap raw ATRAC data in WAV container or auto-convert to PCM via ffmpeg
+- [ ] **Download output format** — Convert downloaded raw ATRAC data to MP3 via ffmpeg
 - [ ] **More device support** — Exploit constants are MZ-N505-specific; other Type-R/S/Hi-MD devices need different firmware addresses from netmd-exploits device tables
 - [ ] **Exploit cleanup/unpatch** — Add firmware unpatch sequence so device recovers without battery pull after failed downloads
 - [x] ~~UI themes~~ — 7 built-in themes (Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord), cycle with t/T
-- [ ] **Animations** — Disc spinning animation, progress bar effects, transitions between views
-- [ ] **Arbitrary file storage** — Encode any file (images, documents, etc.) into ATRAC audio for upload, decode back on download. Enables using MiniDisc as a data storage medium
+- [ ] **Disc spinning animation** — Animated spinning disc in the disc info panel (needs better ASCII art)
+- [x] ~~Animations (partial)~~ — Progress bar dot animation, dim/brighten view transitions, modal slide-in
+- [x] ~~Arbitrary file storage~~ — Encode any file as LP2 track, decode back after download. CLI: `--store encode/decode/calibrate/analyze`. Tested up to 175KB on MZ-N505 (anti-shock cache limit). Larger files need chunked download (future).
+- [ ] **File storage: chunked download** — Read sectors while disc plays to support files larger than 175KB cache limit
+- [ ] **File storage: TUI integration** — Store/retrieve files from within the TUI (currently CLI-only via --store)
 
 ## Completed
 

@@ -4,6 +4,7 @@ import (
     "fmt"
     "path/filepath"
     "strings"
+    "time"
 
     "github.com/c0mmrade/md-tui/internal/device"
     "github.com/c0mmrade/md-tui/internal/ui/theme"
@@ -13,6 +14,8 @@ import (
     tea "github.com/charmbracelet/bubbletea"
     "github.com/charmbracelet/lipgloss"
 )
+
+type phaseTickMsg struct{}
 
 type state int
 
@@ -45,6 +48,7 @@ type Model struct {
     pct        float64
     err        error
     width      int
+    dotFrame   int
 }
 
 func New() Model {
@@ -101,9 +105,13 @@ func (m *Model) GetDownloadParams() (trackIndex int, destPath string) {
     return m.trackIndex, m.pathInput.Value()
 }
 
-func (m *Model) SetDownloading() {
+func (m *Model) SetDownloading() tea.Cmd {
     m.state = stateDownloading
     m.pathInput.Blur()
+    m.dotFrame = 0
+    return tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg {
+        return phaseTickMsg{}
+    })
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
@@ -123,6 +131,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
             }
             return m, func() tea.Msg { return DoneMsg{} }
         }
+
+    case phaseTickMsg:
+        if m.state == stateDownloading {
+            m.dotFrame = (m.dotFrame + 1) % 3
+            return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg {
+                return phaseTickMsg{}
+            })
+        }
+        return m, nil
 
     case ProgressMsg:
         if msg.Progress.TotalBytes > 0 {
@@ -217,6 +234,7 @@ func (m Model) viewProgress() string {
     if phase == "" {
         phase = "reading"
     }
-    return fmt.Sprintf("  %s... %.0f%%\n\n", phase, m.pct*100) +
+    dots := strings.Repeat(".", m.dotFrame+1) + strings.Repeat(" ", 2-m.dotFrame)
+    return fmt.Sprintf("  %s%s %.0f%%\n\n", phase, dots, m.pct*100) +
         "  " + m.progress.ViewAs(m.pct)
 }

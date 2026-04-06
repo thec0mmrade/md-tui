@@ -13,6 +13,10 @@ go build .                    # Build binary (produces ./md-tui)
 ./md-tui                      # Run with real NetMD device (requires libusb-1.0)
 ./md-tui --mock               # Run with mock device (no hardware needed)
 ./md-tui --debug              # Run with verbose USB logging
+./md-tui --store encode <file> <out.wav>   # Encode file for MiniDisc storage
+./md-tui --store decode <raw> <outdir>     # Decode downloaded raw data to file
+./md-tui --store calibrate <out.wav> [N]   # Generate calibration WAV
+./md-tui --store analyze <raw>             # Analyze raw sector layout
 ```
 
 Requires `libusb-1.0-dev` (Linux) or `libusb` (macOS via Homebrew) for real device support. Non-WAV uploads require `ffmpeg` in PATH for conversion. LP2 uploads require `atracdenc` in PATH.
@@ -42,8 +46,12 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
   - `trackedit/` — Rename modal (track or disc title)
   - `confirm/` — Reusable yes/no confirmation dialog
   - `statusbar/` — Bottom bar with device name and status
+- `internal/mdstore/` — Arbitrary file storage on MiniDisc
+  - `encode.go` — Encodes files into LP2 ATRAC3 WAV containers (192-byte frames with metadata + data + padding)
+  - `decode.go` — Decodes downloaded raw sector data back to files. Handles rotated sector order via frame sequence numbers. LP2 sector layout: 20-byte header + 11 × (12-byte SG header + 192-byte frame + 8-byte padding) = 2352 bytes.
+  - `wav.go` — ATRAC3 WAV container builder (format tag 624, nBlockAlign 384)
+  - `calibrate.go` — Generates calibration WAVs and analyzes raw sector data to map sector layout
 - `scripts/` — Node.js helper for exploit-based track download (`download.mjs`). Fallback when native exploit fails. Requires `npm install`.
-- `assets/` — MiniDisc logo PNG for dithered rendering in disc info panel
 
 ### Key Design Decisions
 
@@ -52,8 +60,9 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
 - **Async USB ops** run as `tea.Cmd` functions; long operations (upload/download) use goroutine + channel pattern with `tea.Program.Send()` for progress updates
 - **All mutations** (rename, delete, move, wipe, upload) trigger `refreshDisc()` to reload disc contents
 - **Error banners** auto-dismiss after 5 seconds via `tea.Tick`
-- **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2) → NewTrack → Send
-- **Theme system**: 7 built-in palettes defined in `theme.go` as `Palette` structs. `Apply()` reassigns all color vars and recomputes all style vars. Views read `theme.*` on each `View()` call so changes take effect immediately. `CycleTheme()` cycles through palettes via `t`/`T` keybindings. Logo cache invalidated via `LogoCacheBuster`.
+- **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2, skipped if already ATRAC3) → NewTrack → Send
+- **Theme system**: 7 built-in palettes defined in `theme.go` as `Palette` structs. `Apply()` reassigns all color vars and recomputes all style vars. Views read `theme.*` on each `View()` call so changes take effect immediately. `CycleTheme()` cycles through palettes via `t`/`T` keybindings.
+- **File storage**: LP2 upload path stores data verbatim (no re-encoding). `track.go:152` does `break` for WfLP2 — no byte transformation. Files encoded as 192-byte frames: 3-byte header (type + sequence) + 189-byte payload. Metadata frame stores filename, size, SHA-256. Decoder handles circular cache rotation via sequence number sorting. Cache limit ~175KB on MZ-N505.
 
 ### Vendored netmd Fixes (internal/netmd/)
 

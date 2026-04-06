@@ -20,6 +20,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
 - **Download/rip tracks** — extract audio from disc via native exploit-based download (no external dependencies)
 - **Disc info** — used/free/total time, write-protection status
 - **Color themes** — 7 built-in themes (Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord)
+- **File storage** — store arbitrary files (images, docs, etc.) on MiniDisc via CLI
 
 ## Requirements
 
@@ -88,6 +89,22 @@ Track downloading uses a native implementation of the CachedSectorNoRamControlDo
 If the native exploit fails, md-tui automatically falls back to a Node.js bridge (`scripts/download.mjs`). The fallback requires Node.js 18+ and `npm install` in the `scripts/` directory.
 
 Currently verified on the Sony MZ-N505 (R1.400 firmware). Other Type-R NetMD devices may work but need device-specific firmware constants.
+
+## File Storage
+
+md-tui can store arbitrary files (images, documents, etc.) on MiniDisc by encoding them as LP2 tracks. The device stores LP2 data verbatim without lossy re-encoding, enabling lossless round-trip storage.
+
+```bash
+# Encode a file into an LP2 WAV
+./md-tui --store encode photo.jpg photo.wav
+
+# Upload photo.wav as LP2 via the TUI, then download the track
+
+# Decode the downloaded raw data back to the original file
+./md-tui --store decode photo.raw ./output/
+```
+
+Each file is split into 192-byte frames with a metadata header containing the original filename and SHA-256 checksum. Currently limited to ~175KB per track due to the device's anti-shock DRAM cache size.
 
 ## Acknowledgments
 

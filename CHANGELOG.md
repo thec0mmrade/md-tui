@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0 — 2026-04-05
+
+### Added
+- Arbitrary file storage on MiniDisc — store any file (images, documents, etc.) as LP2 tracks
+  - CLI commands: `--store encode`, `--store decode`, `--store calibrate`, `--store analyze`
+  - Files encoded into LP2 ATRAC3 WAV containers with metadata frame (filename, SHA-256 checksum)
+  - Device stores data verbatim via LP2 upload path (no lossy re-encoding)
+  - Decoder handles rotated sector order from circular disc cache using frame sequence numbers
+  - Tested up to 175KB per track on MZ-N505 (anti-shock DRAM cache limit)
+- Upload now detects pre-encoded ATRAC3 WAV files and skips atracdenc conversion
+- Animated progress dots on upload/download phase text
+- Dim/brighten fade transition on view switch, modal slide-in animation
+
+### Fixed
+- LP2 sector rate estimate increased from 6 to 9 sectors/second (was underestimating download size)
+- Short tracks (< 1 second) now download at least 1 sector instead of 0
+
 ## 0.3.0 — 2026-04-05
 
 ### Added

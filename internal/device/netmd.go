@@ -193,8 +193,8 @@ func (s *NetMDService) Upload(filePath, title string, format UploadFormat, progr
         wavPath = tmp
     }
 
-    // Encode to ATRAC3 for LP2 uploads
-    if format == FormatLP2 {
+    // Encode to ATRAC3 for LP2 uploads (skip if already ATRAC3-encoded)
+    if format == FormatLP2 && !isATRAC3WAV(wavPath) {
         progress <- TransferProgress{Phase: "encoding LP2"}
         atracPath, err := convertToATRAC3(wavPath)
         if err != nil {
@@ -444,6 +444,24 @@ func (s *NetMDService) WipeDisc() error {
         }
     }
     return s.md.SetDiscHeader("")
+}
+
+// isATRAC3WAV checks if a WAV file already has ATRAC3 encoding (format tag 624).
+func isATRAC3WAV(path string) bool {
+    f, err := os.Open(path)
+    if err != nil {
+        return false
+    }
+    defer f.Close()
+    header := make([]byte, 22)
+    if _, err := f.Read(header); err != nil {
+        return false
+    }
+    if string(header[0:4]) != "RIFF" || string(header[8:12]) != "WAVE" {
+        return false
+    }
+    formatTag := int(header[20]) | int(header[21])<<8
+    return formatTag == 624
 }
 
 func needsConversion(path string) bool {

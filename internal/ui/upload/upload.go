@@ -7,6 +7,7 @@ import (
     "sort"
     "strconv"
     "strings"
+    "time"
     "unicode"
 
     "github.com/c0mmrade/md-tui/internal/device"
@@ -18,6 +19,8 @@ import (
     tea "github.com/charmbracelet/bubbletea"
     "github.com/charmbracelet/lipgloss"
 )
+
+type phaseTickMsg struct{}
 
 var audioExts = map[string]bool{
     ".wav": true, ".mp3": true, ".flac": true, ".ogg": true,
@@ -79,6 +82,9 @@ type Model struct {
     queueIdx         int
     batchMode        bool
     stopAfterCurrent bool
+
+    // Animated dots
+    dotFrame int
 }
 
 func New() Model {
@@ -143,11 +149,15 @@ func (m *Model) GetUploadParams() (path, title string, format device.UploadForma
     return m.selectedFile, m.titleInput.Value(), m.format
 }
 
-func (m *Model) SetUploading() {
+func (m *Model) SetUploading() tea.Cmd {
     m.state = stateUploading
     m.titleInput.Blur()
     m.pct = 0
     m.phase = ""
+    m.dotFrame = 0
+    return tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg {
+        return phaseTickMsg{}
+    })
 }
 
 func (m *Model) AdvanceQueue() bool {
@@ -206,6 +216,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
             }
             return m, func() tea.Msg { return DoneMsg{} }
         }
+
+    case phaseTickMsg:
+        if m.state == stateUploading {
+            m.dotFrame = (m.dotFrame + 1) % 3
+            return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg {
+                return phaseTickMsg{}
+            })
+        }
+        return m, nil
 
     case ProgressMsg:
         if msg.Progress.TotalBytes > 0 {
@@ -476,8 +495,9 @@ func (m Model) viewProgress() string {
         hints = "\n\n" + lipgloss.NewStyle().Foreground(theme.WarningColor).Render("  Stopping after this track...")
     }
 
+    dots := strings.Repeat(".", m.dotFrame+1) + strings.Repeat(" ", 2-m.dotFrame)
     return status +
-        fmt.Sprintf("  %s (%s)... %.0f%%\n\n", phase, fmtLabel, m.pct*100) +
+        fmt.Sprintf("  %s%s (%s) %.0f%%\n\n", phase, dots, fmtLabel, m.pct*100) +
         "  " + m.progress.ViewAs(m.pct) + hints
 }
 

@@ -30,9 +30,6 @@ var Palettes = []Palette{
 
 var currentPaletteIndex = 0
 
-// LogoCacheBuster is incremented on theme change to invalidate cached renders.
-var LogoCacheBuster int
-
 // Colors
 var (
 	AccentColor  = lipgloss.Color("#FF6B35")
@@ -136,7 +133,6 @@ func Apply(p Palette) {
 		Foreground(SubtleColor).
 		Italic(true)
 
-	LogoCacheBuster++
 }
 
 // CycleTheme switches to the next (forward=true) or previous theme.

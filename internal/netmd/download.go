@@ -123,14 +123,22 @@ func WriteRawFile(path string, data []byte) error {
 }
 
 // EstimateSectors estimates the number of sectors for a track based on duration and encoding.
-// LP2: ~6 sectors per second, SP: ~18 sectors per second
+// LP2: ~9 sectors per second, SP: ~18 sectors per second
+// LP2 rate is higher than the theoretical 6 because each sector holds 11 ATRAC3
+// sound groups, and the frame packing is denser than the bitrate suggests.
 func EstimateSectors(durationSec int, encoding Encoding) int {
+	var sectors int
 	switch encoding {
 	case EncLP2:
-		return durationSec * 6
+		sectors = durationSec * 9
 	case EncLP4:
-		return durationSec * 3
+		sectors = durationSec * 5
 	default: // SP
-		return durationSec * 18
+		sectors = durationSec * 18
 	}
+	// Always read at least 1 sector (short tracks round down to 0)
+	if sectors < 1 {
+		sectors = 1
+	}
+	return sectors
 }

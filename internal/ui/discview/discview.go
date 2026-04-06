@@ -2,9 +2,6 @@ package discview
 
 import (
     "fmt"
-    "image"
-    _ "image/png"
-    "os"
     "strings"
 
     "github.com/c0mmrade/md-tui/internal/device"
@@ -13,7 +10,6 @@ import (
     "github.com/charmbracelet/bubbles/table"
     tea "github.com/charmbracelet/bubbletea"
     "github.com/charmbracelet/lipgloss"
-    "golang.org/x/image/draw"
 )
 
 type moveState int
@@ -28,13 +24,13 @@ type MoveTrackMsg struct {
 }
 
 type Model struct {
-    table    table.Model
-    disc     *device.Disc
-    width    int
-    height   int
-    moveMode moveState
-    moveFrom int
-    showHelp bool
+    table     table.Model
+    disc      *device.Disc
+    width     int
+    height    int
+    moveMode  moveState
+    moveFrom  int
+    showHelp  bool
 }
 
 func New(width, height int) Model {
@@ -197,11 +193,6 @@ func (m Model) renderDiscInfo(width int) string {
         b.WriteString(lipgloss.NewStyle().Foreground(theme.SuccessColor).Render("Read/Write"))
     }
 
-    // MiniDisc logo
-    if width >= 30 {
-        b.WriteString("\n\n")
-        b.WriteString(renderMiniDiscLogo(width - 2))
-    }
 
     return b.String()
 }
@@ -314,104 +305,6 @@ func formatDuration(d interface{ Minutes() float64 }) string {
         return fmt.Sprintf("%d:%02d", m, s)
     }
     return "?"
-}
-
-var miniDiscLogoCache string
-var miniDiscLogoCacheWidth int
-var miniDiscLogoCacheGen int
-
-func renderMiniDiscLogo(maxWidth int) string {
-    if miniDiscLogoCache != "" && miniDiscLogoCacheWidth == maxWidth && miniDiscLogoCacheGen == theme.LogoCacheBuster {
-        return miniDiscLogoCache
-    }
-
-    logoPath := findLogoFile()
-    if logoPath == "" {
-        return ""
-    }
-
-    f, err := os.Open(logoPath)
-    if err != nil {
-        return ""
-    }
-    defer f.Close()
-
-    img, _, err := image.Decode(f)
-    if err != nil {
-        return ""
-    }
-
-    cols := maxWidth - 2
-    if cols > 40 {
-        cols = 40
-    }
-    if cols < 16 {
-        return ""
-    }
-    // Double vertical resolution using half-block chars (▀)
-    // Each character represents 2 pixel rows
-    pixRows := cols // square image
-    if pixRows%2 != 0 {
-        pixRows--
-    }
-
-    scaled := image.NewRGBA(image.Rect(0, 0, cols, pixRows))
-    draw.NearestNeighbor.Scale(scaled, scaled.Bounds(), img, img.Bounds(), draw.Over, nil)
-
-    accent := theme.AccentColor
-    var b strings.Builder
-    for y := 0; y < pixRows; y += 2 {
-        for x := 0; x < cols; x++ {
-            // Top pixel
-            rt, gt, bt, _ := scaled.At(x, y).RGBA()
-            lumTop := (rt*299 + gt*587 + bt*114) / 1000
-            // Bottom pixel
-            rb, gb, bb, _ := scaled.At(x, y+1).RGBA()
-            lumBot := (rb*299 + gb*587 + bb*114) / 1000
-
-            topBright := lumTop > 20000
-            botBright := lumBot > 20000
-
-            if topBright && botBright {
-                // Both bright — full block in accent
-                b.WriteString(lipgloss.NewStyle().Foreground(accent).Render("█"))
-            } else if topBright && !botBright {
-                // Top bright, bottom dark — upper half block
-                b.WriteString(lipgloss.NewStyle().Foreground(accent).Render("▀"))
-            } else if !topBright && botBright {
-                // Top dark, bottom bright — lower half block
-                b.WriteString(lipgloss.NewStyle().Foreground(accent).Render("▄"))
-            } else {
-                // Both dark — space
-                b.WriteString(" ")
-            }
-        }
-        b.WriteString("\n")
-    }
-
-    miniDiscLogoCache = b.String()
-    miniDiscLogoCacheWidth = maxWidth
-    miniDiscLogoCacheGen = theme.LogoCacheBuster
-    return miniDiscLogoCache
-}
-
-func findLogoFile() string {
-    candidates := []string{
-        "assets/minidisc.png",
-    }
-    if exe, err := os.Executable(); err == nil {
-        dir := strings.TrimSuffix(exe, "/md-tui")
-        candidates = append(candidates, dir+"/assets/minidisc.png")
-    }
-    if wd, err := os.Getwd(); err == nil {
-        candidates = append(candidates, wd+"/assets/minidisc.png")
-    }
-    for _, p := range candidates {
-        if _, err := os.Stat(p); err == nil {
-            return p
-        }
-    }
-    return ""
 }
 
 func formatTime(seconds int) string {

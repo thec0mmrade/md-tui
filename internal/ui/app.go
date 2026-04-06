@@ -48,6 +48,13 @@ type App struct {
     downloadView download.Model
     statusBar    statusbar.Model
     spinner      spinner.Model
+
+    // View transition animation
+    transitionPhase int // 0=normal, 1=dim old, 2=dim new
+    pendingState    ViewState
+
+    // Modal slide-in animation
+    modalSlideFrame int // 0-3, where 3=fully positioned
 }
 
 func NewApp(svc device.DeviceService) *App {
@@ -182,10 +189,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         return a, a.connectDevice(msg.Index)
 
     case DeviceConnectedMsg:
-        a.state = ViewDisc
         a.statusBar.Connected = true
         a.statusBar.DeviceName = msg.Name
-        return a, a.refreshDisc()
+        return a, tea.Batch(a.transitionTo(ViewDisc), a.refreshDisc())
 
     case DiscLoadedMsg:
         a.disc = msg.Disc
@@ -226,8 +232,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     // Upload flow
     case upload.StartUploadMsg:
         path, title, format := a.uploadView.GetUploadParams()
-        a.uploadView.SetUploading()
-        return a, a.startUpload(path, title, format)
+        dotCmd := a.uploadView.SetUploading()
+        return a, tea.Batch(dotCmd, a.startUpload(path, title, format))
 
     case upload.ProgressMsg:
         var cmd tea.Cmd
@@ -241,9 +247,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     case upload.DoneMsg:
         // Check if there are more files in the batch queue
         if a.uploadView.AdvanceQueue() {
-            a.uploadView.SetUploading()
+            dotCmd := a.uploadView.SetUploading()
             path, title, format := a.uploadView.GetUploadParams()
-            return a, a.startUpload(path, title, format)
+            return a, tea.Batch(dotCmd, a.startUpload(path, title, format))
         }
         // Batch complete — set disc title to folder name, then refresh
         if a.uploadView.IsBatchMode() {
@@ -260,7 +266,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     // Download flow
     case download.StartDownloadMsg:
         idx, destPath := a.downloadView.GetDownloadParams()
-        a.downloadView.SetDownloading()
+        dotCmd := a.downloadView.SetDownloading()
         // Run download entirely in background — tea.Cmd would block event loop
         go func() {
             progress := make(chan device.TransferProgress, 100)
@@ -276,7 +282,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                 a.program.Send(downloadCompleteMsg{err: err})
             }
         }()
-        return a, nil
+        return a, dotCmd
 
     case download.ProgressMsg:
         var cmd tea.Cmd
@@ -306,6 +312,28 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             a.spinner, cmd = a.spinner.Update(msg)
             return a, cmd
         }
+
+    case transitionTickMsg:
+        switch a.transitionPhase {
+        case 1:
+            a.state = a.pendingState
+            a.transitionPhase = 2
+            return a, tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
+                return transitionTickMsg{}
+            })
+        case 2:
+            a.transitionPhase = 0
+        }
+        return a, nil
+
+    case modalSlideTickMsg:
+        if a.modalSlideFrame < 3 {
+            a.modalSlideFrame++
+            return a, tea.Tick(30*time.Millisecond, func(time.Time) tea.Msg {
+                return modalSlideTickMsg{}
+            })
+        }
+        return a, nil
     }
 
     // Forward non-handled messages to active modal views
@@ -347,7 +375,7 @@ func (a *App) handleDiscKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
             }
             a.downloadView.Open(idx, title, a.width)
         }
-        return a, nil
+        return a, a.startModalSlide()
     case key.Matches(msg, theme.Keys.Rename):
         if a.discView.HasTracks() && a.disc != nil && !a.disc.WriteProtected {
             idx := a.discView.SelectedTrackIndex()
@@ -357,12 +385,12 @@ func (a *App) handleDiscKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
             }
             a.trackEdit.Open(trackedit.ModeRenameTrack, idx, title, a.width)
         }
-        return a, nil
+        return a, a.startModalSlide()
     case key.Matches(msg, theme.Keys.DiscName):
         if a.disc != nil && !a.disc.WriteProtected {
             a.trackEdit.Open(trackedit.ModeRenameDisc, 0, a.disc.Title, a.width)
         }
-        return a, nil
+        return a, a.startModalSlide()
     case key.Matches(msg, theme.Keys.Delete):
         if a.discView.HasTracks() && a.disc != nil && !a.disc.WriteProtected {
             idx := a.discView.SelectedTrackIndex()
@@ -376,12 +404,12 @@ func (a *App) handleDiscKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
                 a.width,
             )
         }
-        return a, nil
+        return a, a.startModalSlide()
     case key.Matches(msg, theme.Keys.Wipe):
         if a.disc != nil && !a.disc.WriteProtected {
             a.confirmDlg.Open("Wipe entire disc? This cannot be undone.", "wipe", a.width)
         }
-        return a, nil
+        return a, a.startModalSlide()
     }
 
     var cmd tea.Cmd
@@ -415,6 +443,11 @@ func (a *App) View() string {
 
     view := title + errBanner + content + "\n" + statusLine
 
+    // Apply dim effect during view transitions
+    if a.transitionPhase > 0 {
+        view = lipgloss.NewStyle().Faint(true).Render(view)
+    }
+
     // Overlay modals
     if a.trackEdit.IsActive() {
         view = a.overlayModal(a.trackEdit.View())
@@ -433,9 +466,21 @@ func (a *App) View() string {
 }
 
 func (a *App) overlayModal(modal string) string {
+    vPos := lipgloss.Center
+    // Slide-in: offset modal downward during first few frames
+    if a.modalSlideFrame < 3 {
+        // Use lipgloss.Place with vertical position as a fraction
+        // Shift down by (3 - frame) * 2 lines from center
+        offset := (3 - a.modalSlideFrame) * 2
+        return lipgloss.Place(
+            a.width, a.height,
+            lipgloss.Center, lipgloss.Position(0.5+float64(offset)/float64(a.height)),
+            modal,
+        )
+    }
     return lipgloss.Place(
         a.width, a.height,
-        lipgloss.Center, lipgloss.Center,
+        lipgloss.Center, vPos,
         modal,
     )
 }
@@ -458,6 +503,21 @@ func (a *App) viewDeviceSelect() string {
         theme.KeyStyle.Render("q") +
         theme.KeyDescStyle.Render(" to quit")
     return s
+}
+
+func (a *App) transitionTo(newState ViewState) tea.Cmd {
+    a.transitionPhase = 1
+    a.pendingState = newState
+    return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
+        return transitionTickMsg{}
+    })
+}
+
+func (a *App) startModalSlide() tea.Cmd {
+    a.modalSlideFrame = 0
+    return tea.Tick(30*time.Millisecond, func(time.Time) tea.Msg {
+        return modalSlideTickMsg{}
+    })
 }
 
 func (a *App) setError(err error) tea.Cmd {

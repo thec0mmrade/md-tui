@@ -67,3 +67,7 @@ type ErrorMsg struct {
 }
 
 type ClearErrorMsg struct{}
+
+// Animation messages
+type transitionTickMsg struct{}
+type modalSlideTickMsg struct{}
