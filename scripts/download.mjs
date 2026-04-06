@@ -60,6 +60,7 @@ async function main() {
 
         const deviceType = { versionCode, hwid: deviceCode.hwid };
         const exploitClass = getBestSuited(AtracRecovery, deviceType);
+        console.error(`PROGRESS: exploit ${exploitClass.name || exploitClass.constructor?.name || 'unknown'}`);
         const exploit = await stateManager.require(exploitClass);
 
         console.error('PROGRESS: reading 0');

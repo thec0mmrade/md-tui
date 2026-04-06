@@ -3,14 +3,11 @@
 ## Features
 
 - [ ] **LP4 support** — Quarter capacity vs SP, if atracdenc supports ATRAC3 LP4 encoding
-- [ ] **Download output format** — Convert downloaded raw ATRAC data to MP3 via ffmpeg
+- [ ] **Download output format** — JS bridge produces ATRAC3 WAV for audio tracks; add ffmpeg conversion to MP3
+- [ ] **Large file storage download** — NoRam exploit reads from fixed cache positions (~76 sectors). Options: (a) modify JS script to use lower-level sector reading API for raw sectors, (b) implement CachedSectorControlDownload in Go. JS bridge's `downloadTrack()` reformats data as ATRAC3 WAV, stripping our frame structure.
 - [ ] **More device support** — Exploit constants are MZ-N505-specific; other Type-R/S/Hi-MD devices need different firmware addresses from netmd-exploits device tables
 - [ ] **Exploit cleanup/unpatch** — Add firmware unpatch sequence so device recovers without battery pull after failed downloads
-- [x] ~~UI themes~~ — 7 built-in themes (Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord), cycle with t/T
 - [ ] **Disc spinning animation** — Animated spinning disc in the disc info panel (needs better ASCII art)
-- [x] ~~Animations (partial)~~ — Progress bar dot animation, dim/brighten view transitions, modal slide-in
-- [x] ~~Arbitrary file storage~~ — Encode any file as LP2 track, decode back after download. CLI: `--store encode/decode/calibrate/analyze`. Tested up to 175KB on MZ-N505 (anti-shock cache limit).
-- [ ] **CachedSectorControlDownload exploit** — Replace NoRam variant with the full exploit that patches the firmware's USB read handler to serve sectors natively. Required for large file storage (>175KB) and long audio track downloads. The NoRam variant reads from fixed cache positions which limits downloads to the ~76-sector anti-shock buffer.
 - [ ] **File storage: TUI integration** — Store/retrieve files from within the TUI (currently CLI-only via --store)
 
 ## Completed
