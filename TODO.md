@@ -9,9 +9,8 @@
 - [x] ~~UI themes~~ — 7 built-in themes (Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord), cycle with t/T
 - [ ] **Disc spinning animation** — Animated spinning disc in the disc info panel (needs better ASCII art)
 - [x] ~~Animations (partial)~~ — Progress bar dot animation, dim/brighten view transitions, modal slide-in
-- [x] ~~Arbitrary file storage~~ — Encode any file as LP2 track, decode back after download. CLI: `--store encode/decode/calibrate/analyze`. Tested up to 175KB on MZ-N505 (anti-shock cache limit). Larger files need chunked download (future).
-- [ ] **File storage: chunked download** — Read sectors while disc plays to support files larger than 175KB cache limit
-- [ ] **CachedSectorControlDownload exploit** — Replace NoRam variant with the full exploit that patches the firmware's USB read handler to serve sectors natively. Eliminates multi-pass, enables full-speed sequential reads like Web MiniDisc Pro
+- [x] ~~Arbitrary file storage~~ — Encode any file as LP2 track, decode back after download. CLI: `--store encode/decode/calibrate/analyze`. Tested up to 175KB on MZ-N505 (anti-shock cache limit).
+- [ ] **CachedSectorControlDownload exploit** — Replace NoRam variant with the full exploit that patches the firmware's USB read handler to serve sectors natively. Required for large file storage (>175KB) and long audio track downloads. The NoRam variant reads from fixed cache positions which limits downloads to the ~76-sector anti-shock buffer.
 - [ ] **File storage: TUI integration** — Store/retrieve files from within the TUI (currently CLI-only via --store)
 
 ## Completed

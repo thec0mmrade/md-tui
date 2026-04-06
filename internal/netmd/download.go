@@ -3,74 +3,38 @@ package netmd
 import (
 	"fmt"
 	"log"
-	"math"
 	"os"
-	"time"
-)
-
-// Cache and chunking constants (empirically determined on MZ-N505).
-const (
-	cacheCapacitySectors = 76 // ~175KB, tested limit
-	safeSectorsPerPass   = 64 // 85% of cache, margin for timing imprecision
 )
 
 type DownloadProgress struct {
 	Sector       int
 	TotalSectors int
 	Phase        string
-	Pass         int // current pass (0-based), -1 for single-pass
+	Pass         int // -1 for single-pass
 	TotalPasses  int // 0 for single-pass
 }
 
 // DownloadTrack reads a track's ATRAC data from the disc using the exploit mechanism.
-// For small tracks (≤76 sectors), uses single-pass cache fill.
-// For large tracks, uses multi-pass chunked reading.
+//
+// Sequence matches Web MiniDisc Pro pcap:
+// 1. Stop → Factory mode → Firmware reads
+// 2. GotoTrack → SeekToStart (disc starts spinning, fills cache)
+// 3. PatchFirmware (cache fills during patching)
+// 4. Read sectors immediately — no delays, disc keeps spinning
 func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encoding, progress chan<- DownloadProgress) ([]byte, error) {
 	if progress != nil {
 		defer close(progress)
 	}
 
-	if totalSectors > cacheCapacitySectors {
-		return md.downloadChunked(trackIndex, totalSectors, encoding, progress)
-	}
-	return md.downloadSinglePass(trackIndex, totalSectors, progress)
-}
-
-// downloadSinglePass is the original download flow for small tracks.
-func (md *NetMD) downloadSinglePass(trackIndex int, totalSectors int, progress chan<- DownloadProgress) ([]byte, error) {
 	md.Stop()
 	md.Wait()
 
+	// Enter factory mode first (before playback)
 	if md.debug {
-		log.Printf("Navigating to track %d and starting playback...", trackIndex)
+		log.Println("Entering factory mode...")
 	}
 	if progress != nil {
 		progress <- DownloadProgress{Phase: "initializing", Pass: -1}
-	}
-	if err := md.GotoTrack(trackIndex); err != nil {
-		return nil, fmt.Errorf("goto track %d: %w", trackIndex, err)
-	}
-	if err := md.SeekToStart(); err != nil {
-		if md.debug {
-			log.Printf("SeekToStart: %v (non-fatal)", err)
-		}
-	}
-	if err := md.Play(); err != nil {
-		if md.debug {
-			log.Printf("Play: %v (non-fatal)", err)
-		}
-	}
-
-	if md.debug {
-		log.Println("Waiting for disc cache to fill...")
-	}
-	time.Sleep(5 * time.Second)
-
-	md.Stop()
-	md.Wait()
-
-	if md.debug {
-		log.Println("Entering factory mode...")
 	}
 	if err := md.EnterFactoryMode(); err != nil {
 		return nil, fmt.Errorf("factory mode init: %w", err)
@@ -84,6 +48,20 @@ func (md *NetMD) downloadSinglePass(trackIndex int, totalSectors int, progress c
 		return nil, fmt.Errorf("firmware read failed: %w", err)
 	}
 
+	// GotoTrack starts the disc spinning and caching
+	if md.debug {
+		log.Printf("Navigating to track %d...", trackIndex)
+	}
+	if err := md.GotoTrack(trackIndex); err != nil {
+		return nil, fmt.Errorf("goto track %d: %w", trackIndex, err)
+	}
+	if err := md.SeekToStart(); err != nil {
+		if md.debug {
+			log.Printf("SeekToStart: %v (non-fatal)", err)
+		}
+	}
+
+	// Patch firmware while disc fills the cache
 	if md.debug {
 		log.Println("Patching firmware...")
 	}
@@ -94,206 +72,45 @@ func (md *NetMD) downloadSinglePass(trackIndex int, totalSectors int, progress c
 		return nil, fmt.Errorf("firmware patch failed: %w", err)
 	}
 
-	time.Sleep(500 * time.Millisecond)
-
-	return md.readSectors(0, totalSectors, totalSectors, -1, 0, progress)
-}
-
-// downloadChunked reads large tracks in multiple passes, sliding the cache
-// window forward each time.
-//
-// Flow:
-// 1. GotoTrack → SeekToStart → Play → wait (fill initial cache) → Pause
-// 2. EnterFactoryMode → PatchFirmware (once)
-// 3. Read first batch of sectors from cache
-// 4. Loop: Play (resume) → wait (advance cache) → Pause → read next batch
-func (md *NetMD) downloadChunked(trackIndex int, totalSectors int, encoding Encoding, progress chan<- DownloadProgress) ([]byte, error) {
-	fillRate := fillRatePerSec(encoding)
-	totalPasses := int(math.Ceil(float64(totalSectors) / float64(safeSectorsPerPass)))
-
+	// Read sectors from the cache
 	if md.debug {
-		log.Printf("Chunked download: %d sectors, %d passes, fill rate %.1f sectors/sec",
-			totalSectors, totalPasses, fillRate)
+		log.Printf("Reading %d sectors...", totalSectors)
 	}
 
-	// Step 1: Navigate and start playback
-	md.Stop()
-	md.Wait()
-
-	if progress != nil {
-		progress <- DownloadProgress{Phase: "initializing", Pass: 0, TotalPasses: totalPasses}
-	}
-	if err := md.GotoTrack(trackIndex); err != nil {
-		return nil, fmt.Errorf("goto track %d: %w", trackIndex, err)
-	}
-	if err := md.SeekToStart(); err != nil {
-		if md.debug {
-			log.Printf("SeekToStart: %v (non-fatal)", err)
-		}
-	}
-	if err := md.Play(); err != nil {
-		return nil, fmt.Errorf("play: %w", err)
-	}
-
-	// Wait briefly for disc spin-up and initial caching.
-	// Don't wait for full cache fill — for long tracks the disc reads ahead
-	// fast and early sectors would be evicted from the circular cache.
-	// 3 seconds is enough for spin-up + ~27 sectors at LP2 rate.
-	if md.debug {
-		log.Println("Waiting for disc spin-up...")
-	}
-	time.Sleep(3 * time.Second)
-
-	// Pause to freeze cache state (maintains disc position)
-	if err := md.Pause(); err != nil {
-		if md.debug {
-			log.Printf("Pause: %v (non-fatal, trying Stop)", err)
-		}
-		md.Stop()
-		md.Wait()
-	}
-
-	// Step 2: Enter factory mode and patch firmware (once)
-	if md.debug {
-		log.Println("Entering factory mode...")
-	}
-	if err := md.EnterFactoryMode(); err != nil {
-		return nil, fmt.Errorf("factory mode init: %w", err)
-	}
-
-	if md.debug {
-		log.Println("Reading firmware block...")
-	}
-	_, err := md.ReadFirmwareBlock(0x0000, 0x0930)
-	if err != nil {
-		return nil, fmt.Errorf("firmware read failed: %w", err)
-	}
-
-	if md.debug {
-		log.Println("Patching firmware...")
-	}
-	if progress != nil {
-		progress <- DownloadProgress{Phase: "patching", Pass: 0, TotalPasses: totalPasses}
-	}
-	if err := md.PatchFirmware(); err != nil {
-		return nil, fmt.Errorf("firmware patch failed: %w", err)
-	}
-	time.Sleep(500 * time.Millisecond)
-
-	// Step 3: Read sectors in passes using Pause/Play resume.
-	// Works well for medium files (~250KB). For very large files,
-	// cumulative drift causes missed sectors — use CachedSectorControlDownload
-	// exploit variant for full-speed sequential reads (TODO).
 	var allData []byte
-	sector := 0
-	pass := 0
 	emptySectors := 0
-
-	for sector < totalSectors {
-		batchEnd := sector + safeSectorsPerPass
-		if batchEnd > totalSectors {
-			batchEnd = totalSectors
-		}
-
-		if md.debug {
-			log.Printf("Pass %d/%d: reading sectors %d-%d", pass+1, totalPasses, sector, batchEnd-1)
-		}
-
-		// Read this batch
-		for s := sector; s < batchEnd; s++ {
-			if progress != nil {
-				progress <- DownloadProgress{
-					Sector:       s,
-					TotalSectors: totalSectors,
-					Phase:        "reading",
-					Pass:         pass,
-					TotalPasses:  totalPasses,
-				}
-			}
-
-			data, err := md.ExploitReadSector(uint16(s))
-			if err != nil {
-				return nil, fmt.Errorf("read sector %d: %w", s, err)
-			}
-
-			if isEmptySector(data) {
-				emptySectors++
-				if emptySectors >= 3 {
-					if md.debug {
-						log.Printf("3 consecutive empty sectors at %d, stopping early", s)
-					}
-					goto done
-				}
-			} else {
-				emptySectors = 0
-			}
-
-			allData = append(allData, data...)
-		}
-
-		sector = batchEnd
-		pass++
-
-		// If more sectors remain, resume playback to advance cache window
-		if sector < totalSectors {
-			if md.debug {
-				log.Printf("Advancing cache: Play → wait → Pause...")
-			}
-
-			if err := md.Play(); err != nil {
-				if md.debug {
-					log.Printf("Play: %v (non-fatal)", err)
-				}
-			}
-
-			fillTime := float64(safeSectorsPerPass)/fillRate + 1.0
-			time.Sleep(time.Duration(fillTime*1000) * time.Millisecond)
-
-			if err := md.Pause(); err != nil {
-				if md.debug {
-					log.Printf("Pause: %v (non-fatal)", err)
-				}
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
-
-done:
-	if md.debug {
-		log.Printf("Download complete: %d bytes from %d sectors (%d passes)",
-			len(allData), sector, pass)
-	}
-
-	return allData, nil
-}
-
-// readSectors reads a range of sectors and reports progress.
-func (md *NetMD) readSectors(start, end, totalSectors, pass, totalPasses int, progress chan<- DownloadProgress) ([]byte, error) {
-	if md.debug {
-		log.Printf("Reading %d sectors...", end-start)
-	}
-
-	var allData []byte
-	for s := start; s < end; s++ {
+	for sector := 0; sector < totalSectors; sector++ {
 		if progress != nil {
 			progress <- DownloadProgress{
-				Sector:       s,
+				Sector:       sector,
 				TotalSectors: totalSectors,
 				Phase:        "reading",
-				Pass:         pass,
-				TotalPasses:  totalPasses,
+				Pass:         -1,
 			}
 		}
 
-		data, err := md.ExploitReadSector(uint16(s))
+		data, err := md.ExploitReadSector(uint16(sector))
 		if err != nil {
-			return nil, fmt.Errorf("read sector %d: %w", s, err)
+			return nil, fmt.Errorf("read sector %d: %w", sector, err)
 		}
+
+		if isEmptySector(data) {
+			emptySectors++
+			if emptySectors >= 3 {
+				if md.debug {
+					log.Printf("3 consecutive empty sectors at %d, stopping early", sector)
+				}
+				break
+			}
+		} else {
+			emptySectors = 0
+		}
+
 		allData = append(allData, data...)
 	}
 
 	if md.debug {
-		log.Printf("Download complete: %d bytes from %d sectors", len(allData), end-start)
+		log.Printf("Download complete: %d bytes from %d sectors", len(allData), len(allData)/sectorSize)
 	}
 
 	return allData, nil
@@ -340,3 +157,4 @@ func EstimateSectors(durationSec int, encoding Encoding) int {
 	}
 	return sectors
 }
+

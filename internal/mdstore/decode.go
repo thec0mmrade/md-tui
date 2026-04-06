@@ -38,14 +38,16 @@ func DecodeFile(rawPath, outputDir string) (string, error) {
 		return "", fmt.Errorf("no frames found in raw data")
 	}
 
-	// Find metadata frame and collect data frames with sequence numbers
+	// Find metadata frame and collect data frames with sequence numbers.
+	// Validate metadata by checking for a plausible filename (printable ASCII)
+	// and non-zero file size, since stale cache data may have type byte 0x00.
 	var metaFrame []byte
 	var dataFrames []indexedFrame
 
 	for _, f := range allFrames {
 		switch f[0] {
 		case frameTypeMetadata:
-			if metaFrame == nil {
+			if metaFrame == nil && isValidMetadata(f) {
 				metaFrame = f
 			}
 		case frameTypeData:
@@ -54,8 +56,16 @@ func DecodeFile(rawPath, outputDir string) (string, error) {
 		}
 	}
 
+	// Fallback: scan raw data directly for metadata frame pattern.
+	// The SG-based extraction can miss the metadata when cache wrapping
+	// shifts frame alignment relative to sound group boundaries.
 	if metaFrame == nil {
-		return "", fmt.Errorf("no metadata frame found in %d total frames", len(allFrames))
+		metaFrame = scanRawForMetadata(data)
+		// Data frames from SG extraction are still valid — keep them
+	}
+
+	if metaFrame == nil {
+		return "", fmt.Errorf("no valid metadata frame found in raw data (%d bytes)", len(data))
 	}
 
 	// Sort data frames by sequence number
@@ -135,6 +145,49 @@ func DecodeFile(rawPath, outputDir string) (string, error) {
 
 	fmt.Printf("Decoded %s (%d bytes)\n", outputPath, fileSize)
 	return outputPath, nil
+}
+
+// scanRawForMetadata searches the raw data byte-by-byte for a valid metadata
+// frame. Used when SG-based extraction misses it due to cache alignment shifts.
+func scanRawForMetadata(rawData []byte) []byte {
+	for i := 0; i <= len(rawData)-sgFrameLen; i++ {
+		if rawData[i] == frameTypeMetadata && rawData[i+1] == 0x00 && rawData[i+2] == 0x00 {
+			candidate := rawData[i : i+sgFrameLen]
+			if isValidMetadata(candidate) {
+				frame := make([]byte, sgFrameLen)
+				copy(frame, candidate)
+				fmt.Printf("Found metadata via raw scan at byte offset %d\n", i)
+				return frame
+			}
+		}
+	}
+	return nil
+}
+
+// isValidMetadata checks if a frame is a genuine metadata frame by verifying
+// it has a printable filename, non-zero file size, and correct version byte.
+func isValidMetadata(f []byte) bool {
+	if len(f) < sgFrameLen {
+		return false
+	}
+	if f[0] != frameTypeMetadata || f[1] != 0 || f[2] != 0 {
+		return false // must be type=0x00, seq=0x0000
+	}
+	payload := f[3:]
+	// Check filename starts with printable ASCII
+	if payload[0] < 0x20 || payload[0] > 0x7e {
+		return false
+	}
+	// Check file size is non-zero
+	fileSize := binary.LittleEndian.Uint64(payload[128:136])
+	if fileSize == 0 || fileSize > 1<<32 { // sanity: max 4GB
+		return false
+	}
+	// Check version byte
+	if payload[168] != encodingVersion {
+		return false
+	}
+	return true
 }
 
 // extractFramesFromSectors parses raw sector data into 192-byte LP2 frames.

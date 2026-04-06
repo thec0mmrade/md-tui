@@ -63,7 +63,7 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
 - **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2, skipped if already ATRAC3) → NewTrack → Send
 - **Theme system**: 7 built-in palettes defined in `theme.go` as `Palette` structs. `Apply()` reassigns all color vars and recomputes all style vars. Views read `theme.*` on each `View()` call so changes take effect immediately. `CycleTheme()` cycles through palettes via `t`/`T` keybindings.
 - **File storage**: LP2 upload path stores data verbatim (no re-encoding). `track.go:152` does `break` for WfLP2 — no byte transformation. Files encoded as 192-byte frames: 3-byte header (type + sequence) + 189-byte payload. Metadata frame stores filename, size, SHA-256. Decoder handles circular cache rotation via sequence number sorting and deduplication.
-- **Chunked download**: Tracks >76 sectors use multi-pass Pause/Play to advance the cache window (64 sectors per pass). Reliable up to ~250KB. Larger files need CachedSectorControlDownload exploit (patches firmware USB handler for native sequential sector reads, like Web MiniDisc Pro).
+- **Download limitation**: The NoRam exploit reads from fixed DRAM cache positions (~76 sectors). Files >175KB and audio tracks >8s (LP2) may have incomplete data. The CachedSectorControlDownload exploit variant is needed for full-size downloads — it patches the firmware USB handler to serve sectors sequentially (like Web MiniDisc Pro).
 
 ### Vendored netmd Fixes (internal/netmd/)
 

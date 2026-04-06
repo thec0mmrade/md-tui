@@ -7,15 +7,15 @@
   - CLI commands: `--store encode`, `--store decode`, `--store calibrate`, `--store analyze`
   - Files encoded into LP2 ATRAC3 WAV containers with metadata frame (filename, SHA-256 checksum)
   - Device stores data verbatim via LP2 upload path (no lossy re-encoding)
-  - Decoder handles rotated sector order from circular disc cache using frame sequence numbers
-  - Tested up to 250KB per track on MZ-N505 via multi-pass chunked download
-- Multi-pass chunked download for tracks exceeding the 76-sector anti-shock cache
-  - Automatically splits large downloads into 64-sector passes with Pause/Play cache advancement
-  - Single-pass for small tracks (≤76 sectors), multi-pass for larger ones
-  - Files >250KB may have incomplete data due to cache drift (needs CachedSectorControlDownload exploit)
+  - Decoder handles rotated sector order from circular disc cache using frame sequence numbers and raw byte scanning
+  - Tested up to 175KB per track on MZ-N505 (anti-shock DRAM cache limit)
 - Upload now detects pre-encoded ATRAC3 WAV files and skips atracdenc conversion
 - Animated progress dots on upload/download phase text
 - Dim/brighten fade transition on view switch, modal slide-in animation
+
+### Changed
+- Download flow simplified to match Web MiniDisc Pro pcap: Stop → Factory → GotoTrack → Patch → Read (no Play/Pause cycling)
+- Removed 50ms per-chunk delay from exploit reads (~2.3x faster downloads)
 
 ### Fixed
 - LP2 sector rate estimate increased from 6 to 9 sectors/second (was underestimating download size)

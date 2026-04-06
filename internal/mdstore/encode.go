@@ -17,22 +17,12 @@ const (
 	frameTypePadding  = 0xFF
 )
 
-// MaxFileSize is the maximum file size that reliably round-trips via multi-pass
-// chunked download. Tested on MZ-N505: 250KB passes, larger files may have
-// incomplete data due to cache drift with the NoRam exploit variant.
-const MaxFileSize = 250 * 1024 // 250KB — tested limit with multi-pass
-
 // EncodeFile encodes an arbitrary file into an ATRAC3 WAV container for LP2 upload.
 // The WAV can be uploaded as an LP2 track — the device stores the data verbatim.
 func EncodeFile(inputPath, wavOutputPath string) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("read input file: %w", err)
-	}
-
-	if len(data) > MaxFileSize {
-		fmt.Printf("NOTE: File size %d bytes exceeds single-pass cache limit (~%d bytes).\n", len(data), MaxFileSize)
-		fmt.Printf("Download will use multi-pass chunked reading.\n\n")
 	}
 
 	frames := encodeToFrames(filepath.Base(inputPath), data)
