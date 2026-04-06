@@ -8,7 +8,11 @@
   - Files encoded into LP2 ATRAC3 WAV containers with metadata frame (filename, SHA-256 checksum)
   - Device stores data verbatim via LP2 upload path (no lossy re-encoding)
   - Decoder handles rotated sector order from circular disc cache using frame sequence numbers
-  - Tested up to 175KB per track on MZ-N505 (anti-shock DRAM cache limit)
+  - Tested up to 250KB per track on MZ-N505 via multi-pass chunked download
+- Multi-pass chunked download for tracks exceeding the 76-sector anti-shock cache
+  - Automatically splits large downloads into 64-sector passes with Pause/Play cache advancement
+  - Single-pass for small tracks (≤76 sectors), multi-pass for larger ones
+  - Files >250KB may have incomplete data due to cache drift (needs CachedSectorControlDownload exploit)
 - Upload now detects pre-encoded ATRAC3 WAV files and skips atracdenc conversion
 - Animated progress dots on upload/download phase text
 - Dim/brighten fade transition on view switch, modal slide-in animation

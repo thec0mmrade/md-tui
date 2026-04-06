@@ -104,7 +104,7 @@ md-tui can store arbitrary files (images, documents, etc.) on MiniDisc by encodi
 ./md-tui --store decode photo.raw ./output/
 ```
 
-Each file is split into 192-byte frames with a metadata header containing the original filename and SHA-256 checksum. Currently limited to ~175KB per track due to the device's anti-shock DRAM cache size.
+Each file is split into 192-byte frames with a metadata header containing the original filename and SHA-256 checksum. Tested up to 250KB per track using multi-pass chunked download. Larger files may have incomplete data due to anti-shock DRAM cache limitations with the current NoRam exploit variant.
 
 ## Acknowledgments
 

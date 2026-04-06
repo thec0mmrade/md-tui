@@ -11,6 +11,7 @@
 - [x] ~~Animations (partial)~~ — Progress bar dot animation, dim/brighten view transitions, modal slide-in
 - [x] ~~Arbitrary file storage~~ — Encode any file as LP2 track, decode back after download. CLI: `--store encode/decode/calibrate/analyze`. Tested up to 175KB on MZ-N505 (anti-shock cache limit). Larger files need chunked download (future).
 - [ ] **File storage: chunked download** — Read sectors while disc plays to support files larger than 175KB cache limit
+- [ ] **CachedSectorControlDownload exploit** — Replace NoRam variant with the full exploit that patches the firmware's USB read handler to serve sectors natively. Eliminates multi-pass, enables full-speed sequential reads like Web MiniDisc Pro
 - [ ] **File storage: TUI integration** — Store/retrieve files from within the TUI (currently CLI-only via --store)
 
 ## Completed

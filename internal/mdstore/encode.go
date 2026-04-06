@@ -17,9 +17,10 @@ const (
 	frameTypePadding  = 0xFF
 )
 
-// MaxFileSize is the maximum file size that reliably round-trips through the
-// device's anti-shock DRAM cache. Tested on MZ-N505: 175KB passes, 200KB fails.
-const MaxFileSize = 175 * 1024 // 175KB — tested limit on MZ-N505
+// MaxFileSize is the maximum file size that reliably round-trips via multi-pass
+// chunked download. Tested on MZ-N505: 250KB passes, larger files may have
+// incomplete data due to cache drift with the NoRam exploit variant.
+const MaxFileSize = 250 * 1024 // 250KB — tested limit with multi-pass
 
 // EncodeFile encodes an arbitrary file into an ATRAC3 WAV container for LP2 upload.
 // The WAV can be uploaded as an LP2 track — the device stores the data verbatim.
@@ -30,9 +31,8 @@ func EncodeFile(inputPath, wavOutputPath string) error {
 	}
 
 	if len(data) > MaxFileSize {
-		fmt.Printf("WARNING: File size %d bytes exceeds cache limit ~%d bytes.\n", len(data), MaxFileSize)
-		fmt.Printf("The download may lose data due to disc cache eviction.\n")
-		fmt.Printf("Consider splitting the file into smaller chunks.\n\n")
+		fmt.Printf("NOTE: File size %d bytes exceeds single-pass cache limit (~%d bytes).\n", len(data), MaxFileSize)
+		fmt.Printf("Download will use multi-pass chunked reading.\n\n")
 	}
 
 	frames := encodeToFrames(filepath.Base(inputPath), data)
