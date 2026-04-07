@@ -9,6 +9,15 @@
   - Default output extension changed from `.raw` to `.mp3`
   - Use `.raw` extension to save raw sector data (for file storage decode)
 
+### Fixed
+- WAV header bounds check: truncated WAV files now error instead of panicking
+- Secure session bounds check: short device responses now error instead of panicking
+- Sequence number overflow: files >65534 frames (~12.4MB) rejected at encode time
+- EnterFactoryMode: all USB submit/receive errors now checked (were silently ignored)
+- poll(): USB Control() errors now checked and logged (was returning -1 silently)
+- factoryReceive: fails fast on USB error instead of spinning for 30 seconds
+- findDownloadScript: resolves /proc/self/exe symlinks via filepath.EvalSymlinks()
+
 ## 0.4.0 — 2026-04-05
 
 ### Added
