@@ -49,7 +49,7 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
 - `internal/mdstore/` — Arbitrary file storage on MiniDisc
   - `encode.go` — Encodes files into LP2 ATRAC3 WAV containers (192-byte frames with metadata + data + padding)
   - `decode.go` — Decodes downloaded raw sector data back to files. Handles rotated sector order via frame sequence numbers. LP2 sector layout: 20-byte header + 11 × (12-byte SG header + 192-byte frame + 8-byte padding) = 2352 bytes.
-  - `wav.go` — ATRAC3 WAV container builder (format tag 624, nBlockAlign 384)
+  - `wav.go` — ATRAC3 WAV container builder (format tag 624, nBlockAlign 384). Also used by the MP3 download pipeline to wrap extracted ATRAC3 frames for ffmpeg conversion.
   - `calibrate.go` — Generates calibration WAVs and analyzes raw sector data to map sector layout
 - `scripts/` — Node.js helper for exploit-based track download (`download.mjs`). Fallback when native exploit fails. Requires `npm install`.
 
@@ -61,6 +61,7 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
 - **All mutations** (rename, delete, move, wipe, upload) trigger `refreshDisc()` to reload disc contents
 - **Error banners** auto-dismiss after 5 seconds via `tea.Tick`
 - **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2, skipped if already ATRAC3) → NewTrack → Send
+- **Download pipeline**: exploit reads raw sectors → if MP3: extract ATRAC3 frames from SG structure → wrap in ATRAC3 WAV via `mdstore.BuildATRAC3WAV()` → ffmpeg converts to MP3. If `.raw`: save raw sectors directly.
 - **Theme system**: 7 built-in palettes defined in `theme.go` as `Palette` structs. `Apply()` reassigns all color vars and recomputes all style vars. Views read `theme.*` on each `View()` call so changes take effect immediately. `CycleTheme()` cycles through palettes via `t`/`T` keybindings.
 - **File storage**: LP2 upload path stores data verbatim (no re-encoding). `track.go:152` does `break` for WfLP2 — no byte transformation. Files encoded as 192-byte frames: 3-byte header (type + sequence) + 189-byte payload. Metadata frame stores filename, size, SHA-256. Decoder handles circular cache rotation via sequence number sorting and deduplication.
 - **Download limitation**: The NoRam exploit reads from fixed DRAM cache positions (~76 sectors). Files >175KB and audio tracks >8s (LP2) may have incomplete data. The CachedSectorControlDownload exploit variant is needed for full-size downloads — it patches the firmware USB handler to serve sectors sequentially (like Web MiniDisc Pro).

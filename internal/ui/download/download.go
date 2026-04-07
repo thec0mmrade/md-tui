@@ -53,7 +53,7 @@ type Model struct {
 
 func New() Model {
     pi := textinput.New()
-    pi.Placeholder = "/path/to/output.raw"
+    pi.Placeholder = "/path/to/output.mp3"
     pi.CharLimit = 256
     pi.Width = 50
 
@@ -88,7 +88,7 @@ func (m *Model) Open(trackIndex int, trackTitle string, width int) {
     if safe == "" {
         safe = fmt.Sprintf("track_%d", trackIndex+1)
     }
-    m.pathInput.SetValue(filepath.Join(".", safe+".raw"))
+    m.pathInput.SetValue(filepath.Join(".", safe+".mp3"))
     m.pathInput.Focus()
     m.pathInput.CursorEnd()
 }

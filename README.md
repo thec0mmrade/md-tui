@@ -17,7 +17,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
 - **Delete** individual tracks
 - **Move** tracks to reorder
 - **Wipe** entire disc
-- **Download/rip tracks** — extract audio from disc via native exploit-based download (no external dependencies)
+- **Download/rip tracks** — extract audio from disc as MP3 via native exploit (requires ffmpeg for MP3 conversion)
 - **Disc info** — used/free/total time, write-protection status
 - **Color themes** — 7 built-in themes (Default, OneDark Pro, Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord)
 - **File storage** — store arbitrary files (images, docs, etc.) on MiniDisc via CLI
@@ -28,7 +28,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
   - Arch: `pacman -S libusb`
   - Debian/Ubuntu: `apt install libusb-1.0-0-dev`
   - macOS: `brew install libusb`
-- **ffmpeg** (for uploading MP3, FLAC, and other non-WAV formats)
+- **ffmpeg** (for uploading non-WAV formats and downloading as MP3)
 - **atracdenc** (optional, for LP2 uploads — [github.com/dcherednik/atracdenc](https://github.com/dcherednik/atracdenc))
 - **Node.js 18+** (optional fallback for track download — run `npm install` in `scripts/`; not needed if native exploit works)
 - **Go 1.21+** (to build from source)
@@ -84,9 +84,11 @@ Other NetMD devices (MZ-N1, MZ-N707, MZ-N710, MZ-RH1, Sharp IM-DR series, etc.) 
 
 ## Track Download
 
-Track downloading uses a native implementation of the CachedSectorNoRamControlDownload exploit, which reads ATRAC audio data directly from the device's anti-shock DRAM buffer via ARM code execution. This works without any external dependencies beyond libusb.
+Track downloading uses a native implementation of the CachedSectorNoRamControlDownload exploit, which reads ATRAC audio data directly from the device's anti-shock DRAM buffer via ARM code execution.
 
-If the native exploit fails, md-tui automatically falls back to a Node.js bridge (`scripts/download.mjs`). The fallback requires Node.js 18+ and `npm install` in the `scripts/` directory.
+Downloaded tracks default to MP3 format. The exploit reads raw ATRAC sectors, extracts ATRAC3 frames, wraps them in a WAV container, and converts to MP3 via ffmpeg. Use `.raw` extension to save raw sector data instead.
+
+If the native exploit fails, md-tui falls back to a Node.js bridge (`scripts/download.mjs`). The fallback requires Node.js 18+ and `npm install` in the `scripts/` directory.
 
 Currently verified on the Sony MZ-N505 (R1.400 firmware). Other Type-R NetMD devices may work but need device-specific firmware constants.
 

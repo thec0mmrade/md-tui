@@ -9,6 +9,7 @@ import (
     "strings"
     "time"
 
+    "github.com/c0mmrade/md-tui/internal/mdstore"
     netmd "github.com/c0mmrade/md-tui/internal/netmd"
 )
 
@@ -246,14 +247,13 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
         return fmt.Errorf("not connected")
     }
 
-    // Try native exploit download first
+    // Try native exploit download
     err := s.downloadNative(trackIndex, destPath, progress)
     if err == nil {
         return nil
     }
 
     // Native failed — fall back to Node.js bridge
-    // Need to reconnect first since native download may have left device in bad state
     s.md.Close()
     s.md = nil
     s.connected = false
@@ -287,9 +287,14 @@ func (s *NetMDService) downloadNative(trackIndex int, destPath string, progress 
         }
     }()
 
-    data, err := s.md.DownloadTrack(trackIndex, totalSectors, dlProgress)
+    data, err := s.md.DownloadTrack(trackIndex, totalSectors, enc, dlProgress)
     if err != nil {
         return err
+    }
+
+    if wantsMP3(destPath) {
+        progress <- TransferProgress{Phase: "converting"}
+        return convertSectorsToMP3(data, destPath)
     }
 
     return netmd.WriteRawFile(destPath, data)
@@ -304,9 +309,22 @@ func (s *NetMDService) downloadJS(trackIndex int, destPath string, progress chan
         return err
     }
 
-    // Run: node scripts/download.mjs <trackIndex> <destPath>
+    // If MP3 requested, download to a temp WAV first then convert
+    jsOutputPath := destPath
+    mp3Convert := wantsMP3(destPath)
+    if mp3Convert {
+        tmp, err := os.CreateTemp("", "md-tui-dl-*.wav")
+        if err != nil {
+            return fmt.Errorf("failed to create temp file: %w", err)
+        }
+        tmp.Close()
+        jsOutputPath = tmp.Name()
+        defer os.Remove(jsOutputPath)
+    }
+
+    // Run: node scripts/download.mjs <trackIndex> <outputPath>
     cmd := exec.Command("node", scriptPath,
-        fmt.Sprintf("%d", trackIndex), destPath)
+        fmt.Sprintf("%d", trackIndex), jsOutputPath)
 
     stderr, err := cmd.StderrPipe()
     if err != nil {
@@ -352,6 +370,14 @@ func (s *NetMDService) downloadJS(trackIndex int, destPath string, progress chan
             errOutput = errOutput[:200]
         }
         return fmt.Errorf("download failed: %s", strings.TrimSpace(errOutput))
+    }
+
+    // Convert to MP3 if requested
+    if mp3Convert {
+        progress <- TransferProgress{Phase: "converting to MP3"}
+        if err := convertToMP3(jsOutputPath, destPath); err != nil {
+            return err
+        }
     }
 
     // Don't reconnect — device needs replug after exploit session.
@@ -462,6 +488,69 @@ func isATRAC3WAV(path string) bool {
     }
     formatTag := int(header[20]) | int(header[21])<<8
     return formatTag == 624
+}
+
+// convertSectorsToMP3 extracts ATRAC3 frames from raw sector data,
+// wraps them in an ATRAC3 WAV container, and converts to MP3 via ffmpeg.
+func convertSectorsToMP3(sectorData []byte, mp3Path string) error {
+    // Extract ATRAC3 frames from sectors (same layout as file storage)
+    // Each sector: 20-byte header + 11 × (12-byte SG header + 192-byte frame + 8-byte padding)
+    const (
+        sectorSize   = 2352
+        sectorHeader = 20
+        sgHeader     = 12
+        sgFrame      = 192
+        sgPadding    = 8
+        sgTotal      = sgHeader + sgFrame + sgPadding // 212
+        sgPerSector  = 11
+    )
+
+    numSectors := len(sectorData) / sectorSize
+    var frames []byte
+    for s := 0; s < numSectors; s++ {
+        for sg := 0; sg < sgPerSector; sg++ {
+            frameStart := s*sectorSize + sectorHeader + sg*sgTotal + sgHeader
+            if frameStart+sgFrame > len(sectorData) {
+                break
+            }
+            frames = append(frames, sectorData[frameStart:frameStart+sgFrame]...)
+        }
+    }
+
+    // Wrap in ATRAC3 WAV container
+    wav := mdstore.BuildATRAC3WAV(frames)
+
+    // Write temp WAV
+    tmp, err := os.CreateTemp("", "md-tui-atrac-*.wav")
+    if err != nil {
+        return fmt.Errorf("failed to create temp file: %w", err)
+    }
+    tmpPath := tmp.Name()
+    defer os.Remove(tmpPath)
+    if _, err := tmp.Write(wav); err != nil {
+        tmp.Close()
+        return fmt.Errorf("failed to write temp WAV: %w", err)
+    }
+    tmp.Close()
+
+    // Convert to MP3
+    return convertToMP3(tmpPath, mp3Path)
+}
+
+func convertToMP3(src, dst string) error {
+    if _, err := exec.LookPath("ffmpeg"); err != nil {
+        return fmt.Errorf("ffmpeg not found — install ffmpeg to convert downloads to MP3")
+    }
+    cmd := exec.Command("ffmpeg", "-i", src, "-codec:a", "libmp3lame",
+        "-q:a", "2", "-y", dst)
+    if out, err := cmd.CombinedOutput(); err != nil {
+        return fmt.Errorf("MP3 conversion failed: %w\n%s", err, out)
+    }
+    return nil
+}
+
+func wantsMP3(path string) bool {
+    return strings.ToLower(filepath.Ext(path)) == ".mp3"
 }
 
 func needsConversion(path string) bool {

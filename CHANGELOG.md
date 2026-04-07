@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-04-06
+
+### Added
+- MP3 download output — tracks download directly as playable MP3 files
+  - Native exploit reads raw ATRAC sectors, extracts ATRAC3 frames from sound groups
+  - Frames wrapped in ATRAC3 WAV container, converted to MP3 via ffmpeg
+  - Default output extension changed from `.raw` to `.mp3`
+  - Use `.raw` extension to save raw sector data (for file storage decode)
+
 ## 0.4.0 — 2026-04-05
 
 ### Added
