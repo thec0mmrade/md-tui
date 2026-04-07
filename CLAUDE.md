@@ -52,7 +52,14 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
   - `decode.go` — Decodes downloaded raw sector data back to files. Handles rotated sector order via frame sequence numbers. LP2 sector layout: 20-byte header + 11 × (12-byte SG header + 192-byte frame + 8-byte padding) = 2352 bytes.
   - `wav.go` — ATRAC3 WAV container builder (format tag 624, nBlockAlign 384). Also used by the MP3 download pipeline to wrap extracted ATRAC3 frames for ffmpeg conversion.
   - `calibrate.go` — Generates calibration WAVs and analyzes raw sector data to map sector layout
-- `scripts/` — Node.js helper for exploit-based track download (`download.mjs`). Fallback when native exploit fails. Requires `npm install`.
+- `scripts/` — Helper scripts
+  - `download.mjs` — Node.js track download fallback. Requires `npm install`.
+  - `firmware-dump.mjs` — JS firmware dump using netmd-exploits FirmwareDumper
+  - `analyze-firmware.py` — Automated firmware analysis using capstone (ARM disassembler)
+- `docs/` — Research and analysis documents
+  - `firmware-analysis.md` — MZ-N505 R1.400 firmware RE report (2536 functions, USB handlers, EEPROM refs)
+  - `firmware-dump-research.md` — Firmware extraction techniques and boundary bypass details
+  - `homebrew-minidisc-player.md` — Open-source MiniDisc reader/writer hardware research
 
 ### Key Design Decisions
 

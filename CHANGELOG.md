@@ -15,6 +15,10 @@
 - Firmware dump — `--store firmware <output.bin>` extracts full 448KB ROM + 18KB SRAM from device
   - Bypasses factory read boundary check by patching SRAM boundary table
   - Verified byte-identical to netmd-exploits JS FirmwareDumper output
+- Firmware analysis script (`scripts/analyze-firmware.py`) — automated RE with capstone
+  - 2,536 functions identified, 1,570 strings, USB command handler mapping
+  - Known exploit addresses disassembled and cross-referenced
+- Homebrew MiniDisc reader/writer research document (`docs/homebrew-minidisc-player.md`)
 
 ### Fixed
 - WAV header bounds check: truncated WAV files now error instead of panicking

@@ -10,6 +10,9 @@
 
 ## Completed
 
+- [x] ~~Firmware dump~~ — 448KB ROM + 18KB SRAM via boundary check bypass (Go native + JS)
+- [x] ~~Firmware analysis~~ — Automated analysis script, 2536 functions, USB handler mapping, EEPROM references
+- [x] ~~LP4 support~~ — LP4 upload via atracdenc `--bitrate 64`
 - [x] ~~Bug fixes (0.5.0)~~ — WAV/secure bounds checks, sequence overflow protection, factory mode error handling, USB poll/receive error checking, symlink resolution
 - [x] ~~Download output format~~ — Downloads as MP3 via native exploit + ATRAC3 extraction + ffmpeg conversion
 - [x] ~~Exploit cleanup/unpatch~~ — Resolved by CRC16, g_DiscStateStruct, and no-poll fixes

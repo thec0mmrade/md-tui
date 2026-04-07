@@ -140,6 +140,14 @@ The factory read command (`18 21`) normally blocks reads from ROM addresses via 
 
 Currently verified on the Sony MZ-N505 (CXD2677, R1.400 firmware, ARM7TDMI CPU).
 
+An automated analysis script (`scripts/analyze-firmware.py`) produces a report with function prologues, USB command handler mapping, EEPROM register references, and SRAM structure. See `docs/firmware-analysis.md` for results.
+
+## Documentation
+
+- `docs/firmware-analysis.md` — MZ-N505 R1.400 firmware reverse engineering report
+- `docs/firmware-dump-research.md` — Firmware extraction techniques and findings
+- `docs/homebrew-minidisc-player.md` — Research for building an open-source MiniDisc reader/writer with ESP32-S3
+
 ## Acknowledgments
 
 - [go-netmd-lib](https://github.com/enimatek-nl/go-netmd-lib) — Go NetMD protocol implementation (vendored with fixes)
