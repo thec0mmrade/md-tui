@@ -2,7 +2,7 @@
 
 ## Features
 
-- [ ] **LP4 support** — Quarter capacity vs SP, if atracdenc supports ATRAC3 LP4 encoding
+- [x] ~~LP4 support~~ — LP4 upload via atracdenc `--bitrate 64`, quadruples disc capacity vs SP
 - [ ] **Large file storage download** — NoRam exploit reads from fixed cache positions (~76 sectors). Options: (a) modify JS script to use lower-level sector reading API for raw sectors, (b) implement CachedSectorControlDownload in Go.
 - [ ] **More device support** — Exploit constants are MZ-N505-specific; other Type-R/S/Hi-MD devices need different firmware addresses from netmd-exploits device tables
 - [ ] **Disc spinning animation** — Animated spinning disc in the disc info panel (needs better ASCII art)

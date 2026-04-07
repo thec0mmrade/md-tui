@@ -3,6 +3,9 @@
 ## 0.5.0 — 2026-04-06
 
 ### Added
+- LP4 upload support — quadruples disc capacity (80min → 320min) via atracdenc `--bitrate 64`
+  - Format selector in upload dialog now shows SP / LP2 / LP4
+  - LP4 uses 96-byte ATRAC3 frames at 64kbps
 - MP3 download output — tracks download directly as playable MP3 files
   - Native exploit reads raw ATRAC sectors, extracts ATRAC3 frames from sound groups
   - Frames wrapped in ATRAC3 WAV container, converted to MP3 via ffmpeg

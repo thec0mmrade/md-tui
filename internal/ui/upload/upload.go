@@ -317,7 +317,7 @@ func (m Model) updateTitle(msg tea.KeyMsg) (Model, tea.Cmd) {
             }
             return m, nil
         case "right", "l":
-            if m.format < device.FormatLP2 {
+            if m.format < device.FormatLP4 {
                 m.format++
             }
             return m, nil
@@ -443,15 +443,18 @@ func (m Model) renderFormatSelector(focused bool) string {
 
     sp := inactiveStyle.Render(" SP ")
     lp2 := inactiveStyle.Render(" LP2 ")
+    lp4 := inactiveStyle.Render(" LP4 ")
 
     switch m.format {
     case device.FormatSP:
         sp = activeStyle.Render("[SP]")
     case device.FormatLP2:
         lp2 = activeStyle.Render("[LP2]")
+    case device.FormatLP4:
+        lp4 = activeStyle.Render("[LP4]")
     }
 
-    return label + sp + "  " + lp2
+    return label + sp + "  " + lp2 + "  " + lp4
 }
 
 func (m Model) viewModal(title, body string) string {
@@ -483,10 +486,7 @@ func (m Model) viewProgress() string {
         status += fmt.Sprintf("  %s\n\n", lipgloss.NewStyle().Foreground(theme.TextColor).Render(m.CurrentTrackName()))
     }
 
-    fmtLabel := "SP"
-    if m.format == device.FormatLP2 {
-        fmtLabel = "LP2"
-    }
+    fmtLabel := m.format.String()
 
     hints := ""
     if m.batchMode && !m.stopAfterCurrent {

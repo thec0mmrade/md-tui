@@ -9,7 +9,7 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
 
 - **List tracks** — title, duration, format (SP/LP2/LP4), channel info
 - **Upload audio** — MP3, FLAC, OGG, AAC, WAV (non-WAV files auto-converted via ffmpeg)
-- **SP and LP2 formats** — LP2 doubles disc capacity via atracdenc encoding
+- **SP, LP2, and LP4 formats** — LP2 doubles, LP4 quadruples disc capacity via atracdenc encoding
 - **Batch upload** — select a folder to upload all audio files sequentially, auto-sets disc title
 - **Stop batch** — press Esc during batch upload to stop after current track
 - **3-pane file browser** — yazi-style Miller columns for navigating to files

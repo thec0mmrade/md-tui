@@ -92,10 +92,13 @@ func (md *NetMD) NewTrack(title string, fileName string) (trk *Track, err error)
 
 	switch format {
 	case 624:
-		bitsPerSample = int(hexToInt16LE(audioData[32:34]))
-		if bitsPerSample == 384 {
+		blockSize := int(hexToInt16LE(audioData[32:34]))
+		if blockSize == 384 {
 			trk.Format = WfLP2
 			trk.DiscFormat = DfLP2
+		} else if blockSize == 192 {
+			trk.Format = WfLP4
+			trk.DiscFormat = DfLP4
 		} else {
 			return nil, errors.New("atrac3: block size not supported")
 		}
@@ -152,10 +155,8 @@ func (md *NetMD) NewTrack(title string, fileName string) (trk *Track, err error)
 			audioData[i] = audioData[i+1]
 			audioData[i+1] = first
 		}
-	case WfLP2:
+	case WfLP2, WfLP4:
 		break
-	case WfLP4:
-		return nil, errors.New("WireFormat LP4 is currently not supported")
 	}
 
 	// add padding when data length does not fit the frame size

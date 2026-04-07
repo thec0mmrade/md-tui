@@ -60,7 +60,7 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
 - **Async USB ops** run as `tea.Cmd` functions; long operations (upload/download) use goroutine + channel pattern with `tea.Program.Send()` for progress updates
 - **All mutations** (rename, delete, move, wipe, upload) trigger `refreshDisc()` to reload disc contents
 - **Error banners** auto-dismiss after 5 seconds via `tea.Tick`
-- **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2, skipped if already ATRAC3) → NewTrack → Send
+- **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2/LP4, skipped if already ATRAC3) → NewTrack → Send. LP4 uses `--bitrate 64` flag.
 - **Download pipeline**: exploit reads raw sectors → if MP3: extract ATRAC3 frames from SG structure → wrap in ATRAC3 WAV via `mdstore.BuildATRAC3WAV()` → ffmpeg converts to MP3. If `.raw`: save raw sectors directly.
 - **Theme system**: 7 built-in palettes defined in `theme.go` as `Palette` structs. `Apply()` reassigns all color vars and recomputes all style vars. Views read `theme.*` on each `View()` call so changes take effect immediately. `CycleTheme()` cycles through palettes via `t`/`T` keybindings.
 - **File storage**: LP2 upload path stores data verbatim (no re-encoding). `track.go:152` does `break` for WfLP2 — no byte transformation. Files encoded as 192-byte frames: 3-byte header (type + sequence) + 189-byte payload. Metadata frame stores filename, size, SHA-256. Decoder handles circular cache rotation via sequence number sorting and deduplication.

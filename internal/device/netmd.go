@@ -194,10 +194,10 @@ func (s *NetMDService) Upload(filePath, title string, format UploadFormat, progr
         wavPath = tmp
     }
 
-    // Encode to ATRAC3 for LP2 uploads (skip if already ATRAC3-encoded)
-    if format == FormatLP2 && !isATRAC3WAV(wavPath) {
-        progress <- TransferProgress{Phase: "encoding LP2"}
-        atracPath, err := convertToATRAC3(wavPath)
+    // Encode to ATRAC3 for LP2/LP4 uploads (skip if already ATRAC3-encoded)
+    if (format == FormatLP2 || format == FormatLP4) && !isATRAC3WAV(wavPath) {
+        progress <- TransferProgress{Phase: fmt.Sprintf("encoding %s", format)}
+        atracPath, err := convertToATRAC3(wavPath, format)
         if err != nil {
             return err
         }
@@ -579,16 +579,20 @@ func convertToWAV(src string) (string, error) {
     return tmp.Name(), nil
 }
 
-func convertToATRAC3(src string) (string, error) {
+func convertToATRAC3(src string, format UploadFormat) (string, error) {
     if _, err := exec.LookPath("atracdenc"); err != nil {
-        return "", fmt.Errorf("atracdenc not found — install atracdenc for LP2 uploads")
+        return "", fmt.Errorf("atracdenc not found — install atracdenc for LP2/LP4 uploads")
     }
-    tmp, err := os.CreateTemp("", "md-tui-lp2-*.wav")
+    tmp, err := os.CreateTemp("", "md-tui-atrac-*.wav")
     if err != nil {
         return "", fmt.Errorf("failed to create temp file: %w", err)
     }
     tmp.Close()
-    cmd := exec.Command("atracdenc", "-e", "atrac3", "-i", src, "-o", tmp.Name())
+    args := []string{"-e", "atrac3", "-i", src, "-o", tmp.Name()}
+    if format == FormatLP4 {
+        args = []string{"-e", "atrac3", "--bitrate", "64", "-i", src, "-o", tmp.Name()}
+    }
+    cmd := exec.Command("atracdenc", args...)
     if out, err := cmd.CombinedOutput(); err != nil {
         os.Remove(tmp.Name())
         return "", fmt.Errorf("atracdenc encoding failed: %w\n%s", err, out)
