@@ -86,23 +86,9 @@ func runStoreCommand(cmd string, args []string) error {
 
 	case "firmware":
 		if len(args) < 1 {
-			return fmt.Errorf("usage: --store firmware <output.bin> [start-hex end-hex]\n  default range: 0x00000000-0x00080000 (512KB)")
+			return fmt.Errorf("usage: --store firmware <output.bin>\n  Dumps 448KB ROM + 18KB SRAM (~10 minutes)")
 		}
-		startAddr := uint32(0x00000000)
-		endAddr := uint32(0x00080000) // 512KB default
-		if len(args) >= 3 {
-			s, err := strconv.ParseUint(args[1], 0, 32)
-			if err != nil {
-				return fmt.Errorf("invalid start address: %w", err)
-			}
-			e, err := strconv.ParseUint(args[2], 0, 32)
-			if err != nil {
-				return fmt.Errorf("invalid end address: %w", err)
-			}
-			startAddr = uint32(s)
-			endAddr = uint32(e)
-		}
-		svc := device.NewNetMDService(false)
+		svc := device.NewNetMDService(true) // debug mode for firmware dump
 		devices, err := svc.Scan()
 		if err != nil || len(devices) == 0 {
 			return fmt.Errorf("no NetMD device found")
@@ -111,7 +97,7 @@ func runStoreCommand(cmd string, args []string) error {
 			return fmt.Errorf("connect: %w", err)
 		}
 		defer svc.Close()
-		return svc.DumpFirmware(args[0], startAddr, endAddr)
+		return svc.DumpFirmware(args[0])
 
 	default:
 		return fmt.Errorf("unknown store command %q (use: encode, decode, calibrate, analyze, firmware)", cmd)

@@ -17,7 +17,7 @@ go build .                    # Build binary (produces ./md-tui)
 ./md-tui --store decode <raw> <outdir>     # Decode downloaded raw data to file
 ./md-tui --store calibrate <out.wav> [N]   # Generate calibration WAV
 ./md-tui --store analyze <raw>             # Analyze raw sector layout
-./md-tui --store firmware <out.bin>        # Dump device registers (16-bit factory address space)
+./md-tui --store firmware <out.bin>        # Dump 448KB firmware ROM + 18KB SRAM (~10 min)
 ```
 
 Requires `libusb-1.0-dev` (Linux) or `libusb` (macOS via Homebrew) for real device support. Non-WAV uploads require `ffmpeg` in PATH for conversion. LP2 uploads require `atracdenc` in PATH.

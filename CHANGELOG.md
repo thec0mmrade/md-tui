@@ -12,7 +12,9 @@
   - Default output extension changed from `.raw` to `.mp3`
   - Use `.raw` extension to save raw sector data (for file storage decode)
 
-- Device register dump — `--store firmware <output.bin>` reads 16-bit factory address space (device registers/config)
+- Firmware dump — `--store firmware <output.bin>` extracts full 448KB ROM + 18KB SRAM from device
+  - Bypasses factory read boundary check by patching SRAM boundary table
+  - Verified byte-identical to netmd-exploits JS FirmwareDumper output
 
 ### Fixed
 - WAV header bounds check: truncated WAV files now error instead of panicking

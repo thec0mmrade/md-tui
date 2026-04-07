@@ -86,6 +86,12 @@ onePatchAddress:            0x00057be8
 - **Worst case**: Device hang requiring USB replug (no permanent damage)
 - **Firmware patches are volatile** (DRAM) — cleared on power cycle
 
-## Status
+## Status — RESOLVED
 
-Blocked until CachedSectorControlDownload is tested on MZ-N505. The `getBestSuited()` function returns CachedSectorNoRamControlDownload for this device — the Control variant needs to be forced manually.
+The boundary check bypass approach works natively in Go. Key fixes needed:
+1. **CRC16 checksums** on factory write commands (same fix as exploit patching)
+2. **READ_WRITE mode (state=3)** for boundary table, and **don't close** after writing
+3. **Single changeMemState** for ROM reads — open once at address 0, then read without re-opening each address
+4. **Skip 2-byte CRC suffix** in read responses: extract `r[len(r)-16-2 : len(r)-2]`
+
+The Go firmware dump produces byte-identical output to the JS netmd-exploits FirmwareDumper. Full 448KB ROM + 18KB SRAM in ~10 minutes.

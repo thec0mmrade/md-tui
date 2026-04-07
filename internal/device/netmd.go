@@ -556,7 +556,7 @@ func wantsMP3(path string) bool {
     return strings.ToLower(filepath.Ext(path)) == ".mp3"
 }
 
-func (s *NetMDService) DumpFirmware(outputPath string, startAddr, endAddr uint32) error {
+func (s *NetMDService) DumpFirmware(outputPath string) error {
     if s.md == nil {
         return fmt.Errorf("not connected")
     }
@@ -566,30 +566,34 @@ func (s *NetMDService) DumpFirmware(outputPath string, startAddr, endAddr uint32
         return fmt.Errorf("factory mode: %w", err)
     }
 
-    if endAddr > 0x10000 {
-        endAddr = 0x10000
-        fmt.Println("Note: factory read limited to 16-bit address space (0x0000-0xFFFF)")
-    }
-
-    size := endAddr - startAddr
-    reads := size / 16
-    estSeconds := reads * 20 / 1000 // ~20ms per read
-    fmt.Printf("Dumping registers 0x%04x-0x%04x (%d KB, ~%d seconds)...\n",
-        startAddr, endAddr, size/1024, estSeconds)
-
-    data, err := s.md.DumpFirmwareRegisters(startAddr, endAddr, func(pct int) {
-        fmt.Printf("\r  %d%%", pct)
+    fmt.Println("Dumping firmware (448KB ROM + 18KB SRAM, ~10 minutes)...")
+    rom, sram, err := s.md.DumpFullFirmware(func(phase string, pct int) {
+        fmt.Printf("\r  %s... %d%%", phase, pct)
     })
     if err != nil {
+        // Even if ROM dump fails, save what we have
+        if len(sram) > 0 {
+            sramPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".sram"
+            os.WriteFile(sramPath, sram, 0644)
+            fmt.Printf("\nSRAM saved: %s (%d bytes)\n", sramPath, len(sram))
+        }
         return fmt.Errorf("firmware dump: %w", err)
     }
     fmt.Println()
 
-    if err := os.WriteFile(outputPath, data, 0644); err != nil {
-        return fmt.Errorf("write firmware: %w", err)
+    // Write ROM
+    if err := os.WriteFile(outputPath, rom, 0644); err != nil {
+        return fmt.Errorf("write ROM: %w", err)
     }
+    fmt.Printf("ROM dumped: %s (%d bytes)\n", outputPath, len(rom))
 
-    fmt.Printf("Firmware dumped: %s (%d bytes)\n", outputPath, len(data))
+    // Write SRAM
+    sramPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".sram"
+    if err := os.WriteFile(sramPath, sram, 0644); err != nil {
+        return fmt.Errorf("write SRAM: %w", err)
+    }
+    fmt.Printf("SRAM dumped: %s (%d bytes)\n", sramPath, len(sram))
+
     return nil
 }
 
