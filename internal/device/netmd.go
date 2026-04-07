@@ -556,6 +556,43 @@ func wantsMP3(path string) bool {
     return strings.ToLower(filepath.Ext(path)) == ".mp3"
 }
 
+func (s *NetMDService) DumpFirmware(outputPath string, startAddr, endAddr uint32) error {
+    if s.md == nil {
+        return fmt.Errorf("not connected")
+    }
+
+    fmt.Println("Entering factory mode...")
+    if err := s.md.EnterFactoryMode(); err != nil {
+        return fmt.Errorf("factory mode: %w", err)
+    }
+
+    if endAddr > 0x10000 {
+        endAddr = 0x10000
+        fmt.Println("Note: factory read limited to 16-bit address space (0x0000-0xFFFF)")
+    }
+
+    size := endAddr - startAddr
+    reads := size / 16
+    estSeconds := reads * 20 / 1000 // ~20ms per read
+    fmt.Printf("Dumping registers 0x%04x-0x%04x (%d KB, ~%d seconds)...\n",
+        startAddr, endAddr, size/1024, estSeconds)
+
+    data, err := s.md.DumpFirmwareRegisters(startAddr, endAddr, func(pct int) {
+        fmt.Printf("\r  %d%%", pct)
+    })
+    if err != nil {
+        return fmt.Errorf("firmware dump: %w", err)
+    }
+    fmt.Println()
+
+    if err := os.WriteFile(outputPath, data, 0644); err != nil {
+        return fmt.Errorf("write firmware: %w", err)
+    }
+
+    fmt.Printf("Firmware dumped: %s (%d bytes)\n", outputPath, len(data))
+    return nil
+}
+
 func needsConversion(path string) bool {
     ext := strings.ToLower(filepath.Ext(path))
     return ext != ".wav"

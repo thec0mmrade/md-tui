@@ -12,6 +12,8 @@
   - Default output extension changed from `.raw` to `.mp3`
   - Use `.raw` extension to save raw sector data (for file storage decode)
 
+- Device register dump — `--store firmware <output.bin>` reads 16-bit factory address space (device registers/config)
+
 ### Fixed
 - WAV header bounds check: truncated WAV files now error instead of panicking
 - Secure session bounds check: short device responses now error instead of panicking
