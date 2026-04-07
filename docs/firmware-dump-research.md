@@ -86,7 +86,7 @@ onePatchAddress:            0x00057be8
 - **Worst case**: Device hang requiring USB replug (no permanent damage)
 - **Firmware patches are volatile** (DRAM) — cleared on power cycle
 
-## Status — RESOLVED
+## Status — RESOLVED (Firmware Dump)
 
 The boundary check bypass approach works natively in Go. Key fixes needed:
 1. **CRC16 checksums** on factory write commands (same fix as exploit patching)
@@ -95,3 +95,16 @@ The boundary check bypass approach works natively in Go. Key fixes needed:
 4. **Skip 2-byte CRC suffix** in read responses: extract `r[len(r)-16-2 : len(r)-2]`
 
 The Go firmware dump produces byte-identical output to the JS netmd-exploits FirmwareDumper. Full 448KB ROM + 18KB SRAM in ~10 minutes.
+
+## CachedSectorControlDownload — IN PROGRESS
+
+Resident ARM Thumb code (84 bytes) assembled, verified via capstone, and successfully written to SRAM at 0x02003ce0. USB handlers at 0x574fc/0x57500 patched via hardware patch peripheral. Device does not crash.
+
+**Blocker**: The handler at 0x574fc triggers the USB SEND mechanism but doesn't control response CONTENT. The response data is already in the USB buffer (g_usb_buff at 0x02004110) before the handler runs. Our resident code calls `usb_do_response(sectorBuffer, 2352)` but the function may only support the standard USB buffer address.
+
+**What works**: Resident code written, patches applied, device stays stable (no crash).
+**What doesn't work**: Poll reports normal response size (29 bytes for status query), not 2352. The patched handler isn't intercepting at the right point.
+
+**Next steps**: Analyze the firmware's response PREPARATION path — find where response data is written to g_usb_buff and the response size is set. The interception needs to happen there, not at the send handler. The firmware analysis script (`scripts/analyze-firmware.py`) can help trace backward from `usb_do_response` to find the preparation functions.
+
+**Key finding**: `sectorBuffer` address was 0x00003240 (ROM, read-only) — fixed to 0x02003240 (SRAM). Original crash was from writing to ROM.

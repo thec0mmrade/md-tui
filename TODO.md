@@ -3,7 +3,7 @@
 ## Features
 
 - [x] ~~LP4 support~~ — LP4 upload via atracdenc `--bitrate 64`, quadruples disc capacity vs SP
-- [ ] **Large file storage download** — NoRam exploit reads from fixed cache positions (~76 sectors). Options: (a) modify JS script to use lower-level sector reading API for raw sectors, (b) implement CachedSectorControlDownload in Go.
+- [ ] **Large file storage download** — NoRam exploit reads from fixed cache positions (~76 sectors). CachedSectorControlDownload resident code assembled and verified but USB response interception point is wrong — handler at 0x574fc triggers send AFTER data is in buffer, need to intercept where response data is PREPARED. See `exploit_control.go` for working ARM code.
 - [ ] **More device support** — Exploit constants are MZ-N505-specific; other Type-R/S/Hi-MD devices need different firmware addresses from netmd-exploits device tables
 - [ ] **Disc spinning animation** — Animated spinning disc in the disc info panel (needs better ASCII art)
 - [ ] **File storage: TUI integration** — Store/retrieve files from within the TUI (currently CLI-only via --store)

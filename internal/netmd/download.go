@@ -26,6 +26,10 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encodi
 		defer close(progress)
 	}
 
+	// NoRam exploit (cache-limited to ~76 sectors for now)
+	// CachedSectorControlDownload is not yet working — the USB read handler
+	// at 0x574fc triggers sending but doesn't control response content.
+	// See docs/firmware-dump-research.md for details.
 	md.Stop()
 	md.Wait()
 
@@ -108,6 +112,108 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encodi
 
 		allData = append(allData, data...)
 	}
+
+	if md.debug {
+		log.Printf("Download complete: %d bytes from %d sectors", len(allData), len(allData)/sectorSize)
+	}
+
+	return allData, nil
+}
+
+// downloadControlTransfer uses CachedSectorControlDownload for full-speed
+// sequential sector reads. No cache window limits.
+func (md *NetMD) downloadControlTransfer(trackIndex int, totalSectors int, progress chan<- DownloadProgress) ([]byte, error) {
+	md.Stop()
+	md.Wait()
+
+	if md.debug {
+		log.Println("Entering factory mode...")
+	}
+	if progress != nil {
+		progress <- DownloadProgress{Phase: "initializing", Pass: -1}
+	}
+	if err := md.EnterFactoryMode(); err != nil {
+		return nil, fmt.Errorf("factory mode: %w", err)
+	}
+
+	// Navigate to track — disc starts caching
+	if md.debug {
+		log.Printf("Navigating to track %d...", trackIndex)
+	}
+	if err := md.GotoTrack(trackIndex); err != nil {
+		return nil, fmt.Errorf("goto track %d: %w", trackIndex, err)
+	}
+	if err := md.SeekToStart(); err != nil {
+		if md.debug {
+			log.Printf("SeekToStart: %v (non-fatal)", err)
+		}
+	}
+
+	// Install resident code and patch USB handlers
+	if md.debug {
+		log.Println("Setting up CachedSectorControlDownload...")
+	}
+	if progress != nil {
+		progress <- DownloadProgress{Phase: "patching", Pass: -1}
+	}
+	if err := md.SetupControlDownload(); err != nil {
+		return nil, fmt.Errorf("setup control download: %w", err)
+	}
+
+	// Start playback so disc feeds the cache
+	if err := md.Play(); err != nil {
+		if md.debug {
+			log.Printf("Play: %v (non-fatal)", err)
+		}
+	}
+
+	// Enable sector reading from sector 0
+	md.EnableSectorReading(0)
+
+	// Read sectors sequentially
+	if md.debug {
+		log.Printf("Reading %d sectors via control transfer...", totalSectors)
+	}
+
+	var allData []byte
+	emptySectors := 0
+	for sector := 0; sector < totalSectors; sector++ {
+		if progress != nil {
+			progress <- DownloadProgress{
+				Sector:       sector,
+				TotalSectors: totalSectors,
+				Phase:        "reading",
+				Pass:         -1,
+			}
+		}
+
+		data, err := md.ReadSectorControl()
+		if err != nil {
+			if md.debug {
+				log.Printf("Sector %d read error: %v", sector, err)
+			}
+			// Try to continue
+			allData = append(allData, make([]byte, sectorSize)...)
+			continue
+		}
+
+		if isEmptySector(data) {
+			emptySectors++
+			if emptySectors >= 3 {
+				if md.debug {
+					log.Printf("3 consecutive empty sectors at %d, stopping", sector)
+				}
+				break
+			}
+		} else {
+			emptySectors = 0
+		}
+
+		allData = append(allData, data...)
+	}
+
+	// Disable sector reading (restore normal USB)
+	md.DisableSectorReading()
 
 	if md.debug {
 		log.Printf("Download complete: %d bytes from %d sectors", len(allData), len(allData)/sectorSize)

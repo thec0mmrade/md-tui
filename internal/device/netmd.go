@@ -278,6 +278,7 @@ func (s *NetMDService) downloadNative(trackIndex int, destPath string, progress 
 
     dlProgress := make(chan netmd.DownloadProgress, 100)
     go func() {
+        defer func() { recover() }() // prevent panic if progress channel closes
         for p := range dlProgress {
             progress <- TransferProgress{
                 BytesSent:  int64(p.Sector),
