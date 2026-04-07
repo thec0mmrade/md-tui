@@ -74,6 +74,9 @@ func (md *NetMD) NewTrack(title string, fileName string) (trk *Track, err error)
 		return
 	}
 
+	if len(audioData) < 36 {
+		return nil, errors.New("wav: file too short for header")
+	}
 	if !bytes.Equal(audioData[0:4], []byte("RIFF")) {
 		return nil, errors.New("wav: riff header not found")
 	}

@@ -3,6 +3,7 @@ package netmd
 import (
 	"crypto/cipher"
 	"crypto/des"
+	"fmt"
 )
 
 func (md *NetMD) syncTOC() error {
@@ -76,6 +77,9 @@ func (md *NetMD) sessionKeyExchange() error {
 	r, err := md.submit(ControlAccepted, []byte{0x18, 0x00, 0x08, 0x00, 0x46, 0xf0, 0x03, 0x01, 0x03, 0x20}, s)
 	if err != nil {
 		return err
+	}
+	if len(r) < 15 {
+		return fmt.Errorf("sessionKeyExchange: response too short (%d bytes)", len(r))
 	}
 	md.ekb.nonce.Dev = r[15:]
 	return nil

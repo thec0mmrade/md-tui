@@ -25,6 +25,12 @@ func EncodeFile(inputPath, wavOutputPath string) error {
 		return fmt.Errorf("read input file: %w", err)
 	}
 
+	dataFrameCount := (len(data) + framePayloadSize - 1) / framePayloadSize
+	if dataFrameCount > 65534 { // uint16 max minus metadata frame
+		return fmt.Errorf("file too large for encoding: %d bytes (%d frames, max 65534)",
+			len(data), dataFrameCount)
+	}
+
 	frames := encodeToFrames(filepath.Base(inputPath), data)
 
 	// Pad to frame boundary

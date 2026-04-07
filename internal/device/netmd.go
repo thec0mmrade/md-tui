@@ -403,8 +403,11 @@ func findDownloadScript() (string, error) {
         "scripts/download.mjs",
     }
 
-    // Check relative to executable
+    // Check relative to executable (resolve symlinks like /proc/self/exe)
     if exe, err := os.Executable(); err == nil {
+        if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+            exe = resolved
+        }
         dir := filepath.Dir(exe)
         candidates = append(candidates,
             filepath.Join(dir, "scripts", "download.mjs"),
