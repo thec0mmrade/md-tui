@@ -108,6 +108,38 @@ md-tui can store arbitrary files (images, documents, etc.) on MiniDisc by encodi
 
 Each file is split into 192-byte frames with a metadata header containing the original filename and SHA-256 checksum. Currently limited to ~175KB per track (the device's anti-shock DRAM cache size).
 
+## Firmware Dump
+
+Extract the device's ARM firmware ROM (448KB) and SRAM (18KB) for reverse engineering. Two methods available:
+
+### Native Go (recommended)
+
+```bash
+./md-tui --store firmware firmware.bin
+```
+
+Outputs `firmware.bin` (ROM) and `firmware.sram` (SRAM). Takes ~10 minutes. The device must be power-cycled (battery pull) before dumping.
+
+### JavaScript (alternative)
+
+```bash
+cd scripts
+npm install    # first time only
+node firmware-dump.mjs firmware.bin
+```
+
+Outputs `firmware.bin` (ROM) and `firmware.sram` (SRAM). Uses the netmd-exploits `FirmwareDumper` class. Both methods produce identical output.
+
+### How it works
+
+The factory read command (`18 21`) normally blocks reads from ROM addresses via a boundary check table stored in SRAM. The dump process:
+1. Reads the device's 18KB SRAM
+2. Finds the boundary check table by searching for a known signature
+3. Overwrites the table with zeros, disabling the range check
+4. Reads 448KB of firmware ROM starting at address 0x00000000
+
+Currently verified on the Sony MZ-N505 (CXD2677, R1.400 firmware, ARM7TDMI CPU).
+
 ## Acknowledgments
 
 - [go-netmd-lib](https://github.com/enimatek-nl/go-netmd-lib) — Go NetMD protocol implementation (vendored with fixes)
