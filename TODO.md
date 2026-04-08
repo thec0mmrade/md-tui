@@ -4,7 +4,8 @@
 
 - [x] ~~LP4 support~~ — LP4 upload via atracdenc `--bitrate 64`, quadruples disc capacity vs SP
 - [ ] **Large file storage download** — NoRam exploit reads from fixed cache positions (~76 sectors). CachedSectorControlDownload resident code assembled and verified but USB response interception point is wrong — handler at 0x574fc triggers send AFTER data is in buffer, need to intercept where response data is PREPARED. See `exploit_control.go` for working ARM code.
-- [ ] **More device support** — Exploit constants are MZ-N505-specific; other Type-R/S/Hi-MD devices need different firmware addresses from netmd-exploits device tables
+- [ ] **More device support** — Dynamic exploit patching with device detection (R1.000-R1.400, S1.000-S1.600). Runtime firmware version detection via factory 1812 command. S-series downloads work via JS bridge fallback. S-series native exploit blocked — hardware patches apply but don't intercept `readReply`. R-series native download works with dynamic patching.
+- [ ] **S-series MP3 download** — JS bridge downloads raw ATRAC data but MP3 conversion fails. `BuildATRAC3WAV` assumes LP2 (ATRAC3, nBlockAlign=384) but SP tracks use ATRAC1 (nBlockAlign=2048, different codec params). Need encoding-aware WAV container: detect track encoding (SP/LP2/LP4) and build appropriate WAV header before ffmpeg conversion.
 - [ ] **Disc spinning animation** — Animated spinning disc in the disc info panel (needs better ASCII art)
 - [ ] **File storage: TUI integration** — Store/retrieve files from within the TUI (currently CLI-only via --store)
 

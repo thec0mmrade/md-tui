@@ -26,10 +26,7 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encodi
 		defer close(progress)
 	}
 
-	// NoRam exploit (cache-limited to ~76 sectors for now)
-	// CachedSectorControlDownload is not yet working — the USB read handler
-	// at 0x574fc triggers sending but doesn't control response content.
-	// See docs/firmware-dump-research.md for details.
+	// R-series: use NoRam exploit
 	md.Stop()
 	md.Wait()
 
@@ -74,6 +71,19 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encodi
 	}
 	if err := md.PatchFirmware(); err != nil {
 		return nil, fmt.Errorf("firmware patch failed: %w", err)
+	}
+
+	// S-series: set display to ACCESS mode and start playback
+	if md.profile != nil && md.profile.Family == FamilyS {
+		if md.debug {
+			log.Println("S-series: setting display ACCESS mode and starting playback")
+		}
+		md.setDisplayOverride("ACCESS", true)
+		if err := md.Play(); err != nil {
+			if md.debug {
+				log.Printf("Play: %v (non-fatal)", err)
+			}
+		}
 	}
 
 	// Read sectors from the cache
@@ -149,6 +159,16 @@ func (md *NetMD) downloadControlTransfer(trackIndex int, totalSectors int, progr
 		}
 	}
 
+	// S-series: enable code execution first (needed for ARM-based USB patching)
+	if md.profile != nil && md.profile.Family == FamilyS {
+		if md.debug {
+			log.Println("S-series: enabling code execution via PatchFirmware...")
+		}
+		if err := md.PatchFirmware(); err != nil {
+			return nil, fmt.Errorf("patch firmware for code exec: %w", err)
+		}
+	}
+
 	// Install resident code and patch USB handlers
 	if md.debug {
 		log.Println("Setting up CachedSectorControlDownload...")
@@ -158,6 +178,14 @@ func (md *NetMD) downloadControlTransfer(trackIndex int, totalSectors int, progr
 	}
 	if err := md.SetupControlDownload(); err != nil {
 		return nil, fmt.Errorf("setup control download: %w", err)
+	}
+
+	// S-series: set display to ACCESS mode before starting
+	if md.profile != nil && md.profile.Family == FamilyS {
+		if md.debug {
+			log.Println("S-series: setting display ACCESS mode")
+		}
+		md.setDisplayOverride("ACCESS", true)
 	}
 
 	// Start playback so disc feeds the cache

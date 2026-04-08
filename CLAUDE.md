@@ -17,7 +17,7 @@ go build .                    # Build binary (produces ./md-tui)
 ./md-tui --store decode <raw> <outdir>     # Decode downloaded raw data to file
 ./md-tui --store calibrate <out.wav> [N]   # Generate calibration WAV
 ./md-tui --store analyze <raw>             # Analyze raw sector layout
-./md-tui --store firmware <out.bin>        # Dump 448KB firmware ROM + 18KB SRAM (~10 min)
+./md-tui --store firmware <out.bin>        # Dump firmware ROM + SRAM (~10 min, size varies by device)
 ```
 
 Requires `libusb-1.0-dev` (Linux) or `libusb` (macOS via Homebrew) for real device support. Non-WAV uploads require `ffmpeg` in PATH for conversion. LP2 uploads require `atracdenc` in PATH.
@@ -69,10 +69,11 @@ The app follows bubbletea's Elm Architecture pattern. The root model (`internal/
 - **All mutations** (rename, delete, move, wipe, upload) trigger `refreshDisc()` to reload disc contents
 - **Error banners** auto-dismiss after 5 seconds via `tea.Tick`
 - **Upload pipeline**: audio file → ffmpeg (if non-WAV) → atracdenc (if LP2/LP4, skipped if already ATRAC3) → NewTrack → Send. LP4 uses `--bitrate 64` flag.
-- **Download pipeline**: exploit reads raw sectors → if MP3: extract ATRAC3 frames from SG structure → wrap in ATRAC3 WAV via `mdstore.BuildATRAC3WAV()` → ffmpeg converts to MP3. If `.raw`: save raw sectors directly.
+- **Download pipeline**: R-series native exploit reads raw sectors → if MP3: extract ATRAC3 frames from SG structure → wrap in ATRAC3 WAV via `mdstore.BuildATRAC3WAV()` → ffmpeg converts to MP3. If `.raw`: save raw sectors directly. S-series downloads use JS bridge fallback (netmd-exploits) — `.raw` works, `.mp3` conversion not yet working (needs encoding-aware WAV container for SP vs LP2 vs LP4).
 - **Theme system**: 7 built-in palettes defined in `theme.go` as `Palette` structs. `Apply()` reassigns all color vars and recomputes all style vars. Views read `theme.*` on each `View()` call so changes take effect immediately. `CycleTheme()` cycles through palettes via `t`/`T` keybindings.
 - **File storage**: LP2 upload path stores data verbatim (no re-encoding). `track.go:152` does `break` for WfLP2 — no byte transformation. Files encoded as 192-byte frames: 3-byte header (type + sequence) + 189-byte payload. Metadata frame stores filename, size, SHA-256. Decoder handles circular cache rotation via sequence number sorting and deduplication.
 - **Download limitation**: The NoRam exploit reads from fixed DRAM cache positions (~76 sectors). Files >175KB and audio tracks >8s (LP2) may have incomplete data. The CachedSectorControlDownload exploit variant is needed for full-size downloads — it patches the firmware USB handler to serve sectors sequentially (like Web MiniDisc Pro).
+- **Multi-device support**: Device type detected at runtime via factory `1812` command (BCD version byte). R-series (MZ-N505) uses native NoRam exploit for downloads. S-series (MZ-NE410 etc.) falls back to Node.js bridge — native S-series exploit not yet working (hardware patches apply but `readReply` interception fails). Device-specific address tables in `device_profile.go` cover R1.000-R1.400 and S1.000-S1.600.
 
 ### Vendored netmd Fixes (internal/netmd/)
 
@@ -85,7 +86,9 @@ The vendored library has critical fixes over upstream `github.com/enimatek-nl/go
 - **Stereo/mono fix** (`track.go:103`): Channel detection was inverted (`!= 1` instead of `== 1`), causing stereo files to be rejected by the device
 - **Switched from forked gousb** to standard `github.com/google/gousb`
 - **Added playback control** (`playback.go`): Play, Pause, Stop, GotoTrack, GetPosition — uses `playbackCommand()` helper to handle 0xff→0x00 check byte mismatch in responses
-- **Added exploit download** (`exploit.go`, `exploit_setup.go`, `download.go`): CachedSectorNoRamControlDownload exploit — reads ATRAC sectors via ARM code execution on device. Pre-compiled bytecode captured from MZ-N505 USB trace.
-  - `exploit_setup.go`: 37 pre-captured factory commands that patch the device firmware's USB handler to enable ARM code execution via the hardware patch peripheral at `0x03802000`. CRC16-CCITT checksums are dynamically appended to factory write commands (`18 22`). Activation `18 d3` runs after patches are applied.
-  - `exploit.go`: `ExploitReadSectorChunk` sends `18 d3 ff` + ARM bytecode + 4 LE DWORDs (`g_DiscStateStruct`, sector, subsectorStart, length). Response read directly via `0x81` without polling (hooked handler bypasses poll mechanism). Sectors read in 6 chunks of 416+272 bytes = 2352 bytes per sector.
-  - `download.go`: Orchestrates download — fills disc cache via Play(), then enters factory mode, patches firmware, and reads sectors. Falls back to Node.js bridge on failure.
+- **Multi-device exploit support** (`device_profile.go`, `exploit.go`, `exploit_setup.go`, `exploit_control.go`, `download.go`): Runtime device detection and dynamic firmware patching for R-series (R1.000-R1.400) and S-series (S1.000-S1.600) devices.
+  - `device_profile.go`: `DeviceProfile` struct with all exploit-relevant addresses per firmware version. Address tables sourced from netmd-exploits JS library. `LookupProfile()` maps version code to profile. `parseVersionCode()` builds version code from factory `1812` response (BCD format).
+  - `exploit.go`: `EnterFactoryMode()` parses `1812` response to detect chipType (0x20=R, 0x21=S) and firmware version, stores profile on `NetMD` struct. `buildNoRamARMCode()` patches `discStructOffset` and `read_atrac_dram` into ARM code template. `ExploitReadSectorChunk` uses profile for exec command (`0xd3` R-series, `0xd2` S-series), `g_DiscStateStruct`, and ARM code. `DumpFullFirmware` uses profile ROM/SRAM sizes. S-series poll-based reads for diagnostics.
+  - `exploit_setup.go`: `PatchFirmware()` uses dynamic `ApplyFirmwarePatch()` with profile addresses (slot, onePatchAddress, onePatchValue). Falls back to `patchFirmwareLegacy()` (37 pre-captured MZ-N505 commands) when no profile detected.
+  - `exploit_control.go`: `buildResidentCode()` patches constant pool with device-specific addresses. `SetupControlDownload()` uses `applyPatchViaARM()` for S-series (ARM code execution via `18 d2` for USB handler patching). `EnableSectorReading`/`DisableSectorReading` use profile addresses.
+  - `download.go`: R-series uses NoRam exploit (native). S-series skipped for native (not yet working), falls back to Node.js bridge. Device detection happens in `downloadNative` via device name check to avoid entering factory mode before JS bridge needs USB access.

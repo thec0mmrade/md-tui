@@ -11,14 +11,15 @@ import (
 )
 
 type NetMD struct {
-	debug  bool
-	index  int
-	devs   []*gousb.Device
-	ctx    *gousb.Context
-	out    *gousb.OutEndpoint
-	ekb    *EKB
-	config *gousb.Config
-	intf   *gousb.Interface
+	debug   bool
+	index   int
+	devs    []*gousb.Device
+	ctx     *gousb.Context
+	out     *gousb.OutEndpoint
+	ekb     *EKB
+	config  *gousb.Config
+	intf    *gousb.Interface
+	profile *DeviceProfile // detected via factory 1812 command
 }
 
 type Encoding byte

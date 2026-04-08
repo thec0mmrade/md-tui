@@ -96,15 +96,31 @@ The boundary check bypass approach works natively in Go. Key fixes needed:
 
 The Go firmware dump produces byte-identical output to the JS netmd-exploits FirmwareDumper. Full 448KB ROM + 18KB SRAM in ~10 minutes.
 
-## CachedSectorControlDownload — IN PROGRESS
+## Multi-Device Support — IMPLEMENTED
 
-Resident ARM Thumb code (84 bytes) assembled, verified via capstone, and successfully written to SRAM at 0x02003ce0. USB handlers at 0x574fc/0x57500 patched via hardware patch peripheral. Device does not crash.
+Runtime device detection via factory `1812` command. The response contains chipType (0x20=R, 0x21=S), hwid, subversion, and version (BCD byte: 0x16 = v1.6). Address lookup tables for R1.000-R1.400 and S1.000-S1.600 sourced from netmd-exploits JS library.
 
-**Blocker**: The handler at 0x574fc triggers the USB SEND mechanism but doesn't control response CONTENT. The response data is already in the USB buffer (g_usb_buff at 0x02004110) before the handler runs. Our resident code calls `usb_do_response(sectorBuffer, 2352)` but the function may only support the standard USB buffer address.
+**R-series (MZ-N505)**: Dynamic patching works. `PatchFirmware()` uses `ApplyFirmwarePatch()` with profile addresses instead of replaying the 37 pre-captured commands. NoRam exploit downloads work natively. Confirmed identical behavior to legacy path.
 
-**What works**: Resident code written, patches applied, device stays stable (no crash).
-**What doesn't work**: Poll reports normal response size (29 bytes for status query), not 2352. The patched handler isn't intercepting at the right point.
+**S-series (MZ-NE410/NF520D, S1.600)**: Detection works. Dynamic patching applies correctly (no crash). Two exploit approaches attempted:
 
-**Next steps**: Analyze the firmware's response PREPARATION path — find where response data is written to g_usb_buff and the response size is set. The interception needs to happen there, not at the send handler. The firmware analysis script (`scripts/analyze-firmware.py`) can help trace backward from `usb_do_response` to find the preparation functions.
+1. **NoRam exploit**: ARM code executes but `discStructOffset` response size extension doesn't work on S-series. Poll reports 88 bytes (header only). The `str r1, [r0, #0x24]` write to `g_DiscStateStruct` doesn't trigger the firmware's response size extension mechanism on S-series.
 
-**Key finding**: `sectorBuffer` address was 0x00003240 (ROM, read-only) — fixed to 0x02003240 (SRAM). Original crash was from writing to ROM.
+2. **CachedSectorControlDownload**: Resident code (84 bytes) written to SRAM at 0x02005f00. USB handlers patched at 0xde4c/0xde50 via both factory writes AND ARM code execution (`applyPatchViaARM`). Neither approach intercepts `readReply` — reads return 8 or 29 bytes (normal USB response) instead of 2352. The JS netmd-exploits works because its `mainCode` runs the entire setup as one atomic ARM execution inside the device's USB handling context.
+
+**S-series workaround**: Downloads fall back to Node.js bridge (netmd-exploits), which handles S-series natively. Raw downloads work. MP3 conversion pending (needs encoding-aware WAV container).
+
+### Device-Specific Constants
+
+From netmd-exploits source, key differences:
+
+| Constant | R-series | S-series |
+|----------|----------|----------|
+| Exec command | `0xd3` | `0xd2` |
+| Patch slots | 4 | 8 |
+| `onePatchValue` | `[0x1a,0x48,0x00,0x47]` | `[0x13,0x48,0x00,0x47]` |
+| `discStructOffset` | 0x18 (R1.2+), 0x1c (R1.0-1.1) | 0x24 |
+| ROM size | 448KB | 640KB |
+| SRAM size | 18KB | 36KB |
+
+Full address tables in `internal/netmd/device_profile.go`.

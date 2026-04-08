@@ -3,6 +3,7 @@ package device
 import (
     "bufio"
     "fmt"
+    "log"
     "os"
     "os/exec"
     "path/filepath"
@@ -259,10 +260,24 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
     s.connected = false
     time.Sleep(2 * time.Second)
 
-    return s.downloadJS(trackIndex, destPath, progress)
+    err = s.downloadJS(trackIndex, destPath, progress)
+
+    // Try to reconnect after JS bridge releases the device
+    s.reconnect()
+
+    return err
 }
 
 func (s *NetMDService) downloadNative(trackIndex int, destPath string, progress chan<- TransferProgress) error {
+    // Check device name — skip native for non-R-series devices.
+    // Don't enter factory mode here; it would interfere with the JS fallback.
+    devName := s.md.DeviceName()
+    if devName != "Sony MZ-N505" {
+        // Only MZ-N505 (R-series) native exploit is confirmed working.
+        // Other devices fall through to JS bridge.
+        return fmt.Errorf("native download not supported for %s", devName)
+    }
+
     length, err := s.md.RequestTrackLength(trackIndex)
     if err != nil {
         return fmt.Errorf("failed to get track length: %w", err)
@@ -376,8 +391,33 @@ func (s *NetMDService) downloadJS(trackIndex int, destPath string, progress chan
     // Convert to MP3 if requested
     if mp3Convert {
         progress <- TransferProgress{Phase: "converting to MP3"}
-        if err := convertToMP3(jsOutputPath, destPath); err != nil {
-            return err
+        fi, statErr := os.Stat(jsOutputPath)
+        if statErr != nil {
+            return fmt.Errorf("JS output missing: %w", statErr)
+        }
+        if s.debug {
+            log.Printf("JS output: %s (%d bytes)", jsOutputPath, fi.Size())
+        }
+        if fi.Size() == 0 {
+            return fmt.Errorf("JS bridge produced empty output")
+        }
+        // JS bridge outputs pure ATRAC3 frames (not raw sectors with SG headers).
+        // Wrap directly in ATRAC3 WAV container, then convert to MP3.
+        frameData, readErr := os.ReadFile(jsOutputPath)
+        if readErr != nil {
+            return fmt.Errorf("failed to read JS output: %w", readErr)
+        }
+        wav := mdstore.BuildATRAC3WAV(frameData)
+        tmpWav, tmpErr := os.CreateTemp("", "md-tui-atrac-*.wav")
+        if tmpErr != nil {
+            return fmt.Errorf("failed to create temp WAV: %w", tmpErr)
+        }
+        tmpWavPath := tmpWav.Name()
+        defer os.Remove(tmpWavPath)
+        tmpWav.Write(wav)
+        tmpWav.Close()
+        if err := convertToMP3(tmpWavPath, destPath); err != nil {
+            return fmt.Errorf("MP3 conversion failed: %w", err)
         }
     }
 
