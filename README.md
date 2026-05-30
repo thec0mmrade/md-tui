@@ -29,20 +29,22 @@ A terminal UI for managing Sony NetMD MiniDisc devices.
   - Debian/Ubuntu: `apt install libusb-1.0-0-dev`
   - macOS: `brew install libusb`
 - **ffmpeg** (for uploading non-WAV formats and downloading as MP3)
-- **atracdenc** (optional, for LP2 uploads — [github.com/dcherednik/atracdenc](https://github.com/dcherednik/atracdenc))
+- **atracdenc** (optional, for LP2 uploads — [github.com/dcherednik/atracdenc](https://github.com/dcherednik/atracdenc)) — build from source with `git clone --recursive` (the AUR package is broken due to a missing submodule)
 - **Node.js 18+** (optional fallback for track download — run `npm install` in `scripts/`; not needed if native exploit works)
 - **Go 1.21+** (to build from source)
 
 ### Linux udev rules
 
-To access the device without root, create `/etc/udev/rules.d/60-netmd.rules`:
+To access the device without root, install the provided rules file:
 
-```
-SUBSYSTEM=="usb", ATTR{idVendor}=="054c", MODE="0666"
-SUBSYSTEM=="usb", ATTR{idVendor}=="04dd", MODE="0666"
+```bash
+sudo cp scripts/99-netmd.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-Then reload: `sudo udevadm control --reload-rules && sudo udevadm trigger`
+Then replug the device. The rules file covers all known Sony and Sharp NetMD devices.
+
+> **Arch Linux:** the `plugdev` group does not exist. The provided rules file uses `wheel` instead. Make sure your user is in the `wheel` group (`groups` to check).
 
 ## Install
 
