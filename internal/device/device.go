@@ -1,6 +1,9 @@
 package device
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Encoding int
 
@@ -85,7 +88,7 @@ type DeviceService interface {
 
     // Write
     Upload(filePath, title string, format UploadFormat, progress chan<- TransferProgress) error
-    Download(trackIndex int, destPath string, progress chan<- TransferProgress) error
+    Download(ctx context.Context, trackIndex int, destPath string, progress chan<- TransferProgress) error
     RenameTrack(index int, title string) error
     RenameDisc(title string) error
     DeleteTrack(index int) error

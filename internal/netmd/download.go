@@ -1,6 +1,7 @@
 package netmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -21,7 +22,7 @@ type DownloadProgress struct {
 // 2. GotoTrack → SeekToStart (disc starts spinning, fills cache)
 // 3. PatchFirmware (cache fills during patching)
 // 4. Read sectors immediately — no delays, disc keeps spinning
-func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encoding, progress chan<- DownloadProgress) ([]byte, error) {
+func (md *NetMD) DownloadTrack(ctx context.Context, trackIndex int, totalSectors int, encoding Encoding, progress chan<- DownloadProgress) ([]byte, error) {
 	if progress != nil {
 		defer close(progress)
 	}
@@ -94,6 +95,12 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encodi
 	var allData []byte
 	emptySectors := 0
 	for sector := 0; sector < totalSectors; sector++ {
+		select {
+		case <-ctx.Done():
+			return nil, context.Canceled
+		default:
+		}
+
 		if progress != nil {
 			progress <- DownloadProgress{
 				Sector:       sector,
@@ -132,7 +139,7 @@ func (md *NetMD) DownloadTrack(trackIndex int, totalSectors int, encoding Encodi
 
 // downloadControlTransfer uses CachedSectorControlDownload for full-speed
 // sequential sector reads. No cache window limits.
-func (md *NetMD) downloadControlTransfer(trackIndex int, totalSectors int, progress chan<- DownloadProgress) ([]byte, error) {
+func (md *NetMD) downloadControlTransfer(ctx context.Context, trackIndex int, totalSectors int, progress chan<- DownloadProgress) ([]byte, error) {
 	md.Stop()
 	md.Wait()
 
@@ -206,6 +213,13 @@ func (md *NetMD) downloadControlTransfer(trackIndex int, totalSectors int, progr
 	var allData []byte
 	emptySectors := 0
 	for sector := 0; sector < totalSectors; sector++ {
+		select {
+		case <-ctx.Done():
+			md.DisableSectorReading()
+			return nil, context.Canceled
+		default:
+		}
+
 		if progress != nil {
 			progress <- DownloadProgress{
 				Sector:       sector,

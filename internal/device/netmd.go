@@ -2,6 +2,7 @@ package device
 
 import (
     "bufio"
+    "context"
     "fmt"
     "log"
     "os"
@@ -241,7 +242,7 @@ func (s *NetMDService) Upload(filePath, title string, format UploadFormat, progr
     return nil
 }
 
-func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<- TransferProgress) error {
+func (s *NetMDService) Download(ctx context.Context, trackIndex int, destPath string, progress chan<- TransferProgress) error {
     defer close(progress)
 
     if s.md == nil {
@@ -249,9 +250,12 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
     }
 
     // Try native exploit download
-    err := s.downloadNative(trackIndex, destPath, progress)
+    err := s.downloadNative(ctx, trackIndex, destPath, progress)
     if err == nil {
         return nil
+    }
+    if ctx.Err() != nil {
+        return ctx.Err()
     }
 
     // Native failed — fall back to Node.js bridge
@@ -260,7 +264,7 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
     s.connected = false
     time.Sleep(2 * time.Second)
 
-    err = s.downloadJS(trackIndex, destPath, progress)
+    err = s.downloadJS(ctx, trackIndex, destPath, progress)
 
     // Try to reconnect after JS bridge releases the device
     s.reconnect()
@@ -268,7 +272,7 @@ func (s *NetMDService) Download(trackIndex int, destPath string, progress chan<-
     return err
 }
 
-func (s *NetMDService) downloadNative(trackIndex int, destPath string, progress chan<- TransferProgress) error {
+func (s *NetMDService) downloadNative(ctx context.Context, trackIndex int, destPath string, progress chan<- TransferProgress) error {
     // Check device name — skip native for non-R-series devices.
     // Don't enter factory mode here; it would interfere with the JS fallback.
     devName := s.md.DeviceName()
@@ -303,7 +307,7 @@ func (s *NetMDService) downloadNative(trackIndex int, destPath string, progress 
         }
     }()
 
-    data, err := s.md.DownloadTrack(trackIndex, totalSectors, enc, dlProgress)
+    data, err := s.md.DownloadTrack(ctx, trackIndex, totalSectors, enc, dlProgress)
     if err != nil {
         return err
     }
@@ -316,7 +320,7 @@ func (s *NetMDService) downloadNative(trackIndex int, destPath string, progress 
     return netmd.WriteRawFile(destPath, data)
 }
 
-func (s *NetMDService) downloadJS(trackIndex int, destPath string, progress chan<- TransferProgress) error {
+func (s *NetMDService) downloadJS(ctx context.Context, trackIndex int, destPath string, progress chan<- TransferProgress) error {
     progress <- TransferProgress{Phase: "downloading"}
 
     // Find the download helper script
@@ -339,7 +343,7 @@ func (s *NetMDService) downloadJS(trackIndex int, destPath string, progress chan
     }
 
     // Run: node scripts/download.mjs <trackIndex> <outputPath>
-    cmd := exec.Command("node", scriptPath,
+    cmd := exec.CommandContext(ctx, "node", scriptPath,
         fmt.Sprintf("%d", trackIndex), jsOutputPath)
 
     stderr, err := cmd.StderrPipe()

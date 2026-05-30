@@ -1,6 +1,7 @@
 package ui
 
 import (
+    "context"
     "fmt"
     "time"
 
@@ -49,6 +50,8 @@ type App struct {
     statusBar    statusbar.Model
     spinner      spinner.Model
 
+    cancelDownload context.CancelFunc
+
     // View transition animation
     transitionPhase int // 0=normal, 1=dim old, 2=dim new
     pendingState    ViewState
@@ -94,8 +97,9 @@ type downloadCompleteMsg struct {
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     // Handle download completion FIRST — before any modal forwarding
     if msg, ok := msg.(downloadCompleteMsg); ok {
+        a.cancelDownload = nil
         a.downloadView.Close()
-        if msg.err != nil {
+        if msg.err != nil && msg.err != context.Canceled {
             return a, a.setError(msg.err)
         }
         a.statusBar.Message = "Download complete"
@@ -267,6 +271,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     case download.StartDownloadMsg:
         idx, destPath := a.downloadView.GetDownloadParams()
         dotCmd := a.downloadView.SetDownloading()
+        ctx, cancel := context.WithCancel(context.Background())
+        a.cancelDownload = cancel
         // Run download entirely in background — tea.Cmd would block event loop
         go func() {
             progress := make(chan device.TransferProgress, 100)
@@ -277,7 +283,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                     }
                 }
             }()
-            err := a.device.Download(idx, destPath, progress)
+            err := a.device.Download(ctx, idx, destPath, progress)
+            cancel()
             if a.program != nil {
                 a.program.Send(downloadCompleteMsg{err: err})
             }
@@ -290,6 +297,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         return a, cmd
 
     case download.CancelMsg:
+        if a.cancelDownload != nil {
+            a.cancelDownload()
+            a.cancelDownload = nil
+        }
         return a, nil
 
     // Mutation results — refresh disc

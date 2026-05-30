@@ -1,6 +1,7 @@
 package device
 
 import (
+    "context"
     "fmt"
     "time"
 )
@@ -102,7 +103,7 @@ func (m *MockService) Upload(filePath, title string, format UploadFormat, progre
     return nil
 }
 
-func (m *MockService) Download(trackIndex int, destPath string, progress chan<- TransferProgress) error {
+func (m *MockService) Download(ctx context.Context, trackIndex int, destPath string, progress chan<- TransferProgress) error {
     if !m.connected {
         return fmt.Errorf("not connected")
     }
@@ -113,6 +114,11 @@ func (m *MockService) Download(trackIndex int, destPath string, progress chan<- 
 
     total := int64(5_000_000)
     for sent := int64(0); sent < total; sent += 200_000 {
+        select {
+        case <-ctx.Done():
+            return ctx.Err()
+        default:
+        }
         progress <- TransferProgress{BytesSent: sent, TotalBytes: total, Phase: "reading"}
         time.Sleep(60 * time.Millisecond)
     }

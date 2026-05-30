@@ -124,6 +124,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
         if m.state == stateForm {
             return m.updateForm(msg)
         }
+        if m.state == stateDownloading {
+            if key.Matches(msg, theme.Keys.Cancel) {
+                m.active = false
+                return m, func() tea.Msg { return CancelMsg{} }
+            }
+        }
         if m.state == stateDone {
             m.active = false
             if m.err != nil {
@@ -235,6 +241,7 @@ func (m Model) viewProgress() string {
         phase = "reading"
     }
     dots := strings.Repeat(".", m.dotFrame+1) + strings.Repeat(" ", 2-m.dotFrame)
+    hints := theme.KeyDescStyle.Render("Esc: cancel")
     return fmt.Sprintf("  %s%s %.0f%%\n\n", phase, dots, m.pct*100) +
-        "  " + m.progress.ViewAs(m.pct)
+        "  " + m.progress.ViewAs(m.pct) + "\n\n" + hints
 }
