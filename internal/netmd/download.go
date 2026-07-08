@@ -75,7 +75,7 @@ func (md *NetMD) DownloadTrack(ctx context.Context, trackIndex int, totalSectors
 	}
 
 	// S-series: set display to ACCESS mode and start playback
-	if md.profile != nil && md.profile.Family == FamilyS {
+	if md.isSeriesS() {
 		if md.debug {
 			log.Println("S-series: setting display ACCESS mode and starting playback")
 		}
@@ -167,7 +167,7 @@ func (md *NetMD) downloadControlTransfer(ctx context.Context, trackIndex int, to
 	}
 
 	// S-series: enable code execution first (needed for ARM-based USB patching)
-	if md.profile != nil && md.profile.Family == FamilyS {
+	if md.isSeriesS() {
 		if md.debug {
 			log.Println("S-series: enabling code execution via PatchFirmware...")
 		}
@@ -188,7 +188,7 @@ func (md *NetMD) downloadControlTransfer(ctx context.Context, trackIndex int, to
 	}
 
 	// S-series: set display to ACCESS mode before starting
-	if md.profile != nil && md.profile.Family == FamilyS {
+	if md.isSeriesS() {
 		if md.debug {
 			log.Println("S-series: setting display ACCESS mode")
 		}

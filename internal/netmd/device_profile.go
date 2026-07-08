@@ -22,9 +22,7 @@ type DeviceProfile struct {
 	Family      DeviceFamily
 
 	// Patch peripheral
-	PatchBase       uint32 // 0x03802000 for R/S
-	PatchControl    uint32 // base + totalSlots*0x10
-	TotalPatchSlots int    // 4 for R, 8 for S
+	TotalPatchSlots int // 4 for R, 8 for S
 
 	// USB code execution
 	ExecCommand     byte     // 0xd3 for R, 0xd2 for S
@@ -76,6 +74,11 @@ func parseVersionCode(chipType byte, versionByte byte, subversion byte) string {
 	return fmt.Sprintf("%s%d.%d%02X", prefix, major, minor, subversion)
 }
 
+// isSeriesS reports whether the detected device is a Type-S (CXD2680) unit.
+func (md *NetMD) isSeriesS() bool {
+	return md.profile != nil && md.profile.Family == FamilyS
+}
+
 // LookupProfile returns the device profile for a version code, or nil if unknown.
 func LookupProfile(versionCode string) *DeviceProfile {
 	p, ok := deviceProfiles[versionCode]
@@ -99,8 +102,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"R1.000": {
 		VersionCode:      "R1.000",
 		Family:           FamilyR,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802040,
 		TotalPatchSlots:  4,
 		ExecCommand:      0xd3,
 		OnePatchAddress:  0x00056228,
@@ -122,8 +123,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"R1.100": {
 		VersionCode:      "R1.100",
 		Family:           FamilyR,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802040,
 		TotalPatchSlots:  4,
 		ExecCommand:      0xd3,
 		OnePatchAddress:  0x00056aac,
@@ -145,8 +144,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"R1.200": {
 		VersionCode:      "R1.200",
 		Family:           FamilyR,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802040,
 		TotalPatchSlots:  4,
 		ExecCommand:      0xd3,
 		OnePatchAddress:  0x000577f8,
@@ -168,8 +165,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"R1.300": {
 		VersionCode:      "R1.300",
 		Family:           FamilyR,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802040,
 		TotalPatchSlots:  4,
 		ExecCommand:      0xd3,
 		OnePatchAddress:  0x00057b48,
@@ -191,8 +186,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"R1.400": {
 		VersionCode:      "R1.400",
 		Family:           FamilyR,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802040,
 		TotalPatchSlots:  4,
 		ExecCommand:      0xd3,
 		OnePatchAddress:  0x00057be8,
@@ -216,8 +209,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"S1.000": {
 		VersionCode:      "S1.000",
 		Family:           FamilyS,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802080,
 		TotalPatchSlots:  8,
 		ExecCommand:      0xd2,
 		OnePatchAddress:  0x0000e784,
@@ -239,8 +230,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"S1.100": {
 		VersionCode:      "S1.100",
 		Family:           FamilyS,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802080,
 		TotalPatchSlots:  8,
 		ExecCommand:      0xd2,
 		OnePatchAddress:  0x0000d784,
@@ -262,8 +251,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"S1.200": {
 		VersionCode:      "S1.200",
 		Family:           FamilyS,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802080,
 		TotalPatchSlots:  8,
 		ExecCommand:      0xd2,
 		OnePatchAddress:  0x0000d834,
@@ -285,8 +272,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"S1.300": {
 		VersionCode:      "S1.300",
 		Family:           FamilyS,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802080,
 		TotalPatchSlots:  8,
 		ExecCommand:      0xd2,
 		OnePatchAddress:  0x0000daa8,
@@ -308,8 +293,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"S1.400": {
 		VersionCode:      "S1.400",
 		Family:           FamilyS,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802080,
 		TotalPatchSlots:  8,
 		ExecCommand:      0xd2,
 		OnePatchAddress:  0x0000e4c4,
@@ -331,8 +314,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"S1.500": {
 		VersionCode:      "S1.500",
 		Family:           FamilyS,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802080,
 		TotalPatchSlots:  8,
 		ExecCommand:      0xd2,
 		OnePatchAddress:  0x0000e538,
@@ -354,8 +335,6 @@ var deviceProfiles = map[string]*DeviceProfile{
 	"S1.600": {
 		VersionCode:      "S1.600",
 		Family:           FamilyS,
-		PatchBase:        0x03802000,
-		PatchControl:     0x03802080,
 		TotalPatchSlots:  8,
 		ExecCommand:      0xd2,
 		OnePatchAddress:  0x0000e69c,

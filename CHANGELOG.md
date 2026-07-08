@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0 — 2026-07-08
+
+### Added
+- Multi-device exploit support — runtime detection of chip type and firmware version via the factory `1812` command
+  - `DeviceProfile` address tables cover R-series R1.000–R1.400 and S-series S1.000–S1.600
+  - Firmware patching, sector reads, and USB handler patches now use device-specific addresses instead of hardcoded MZ-N505 values
+  - Falls back to the pre-captured MZ-N505 R1.400 patch sequence when no profile matches
+- CachedSectorControlDownload — resident ARM code patched into the USB read handler serves sectors sequentially (experimental, not yet confirmed working end-to-end)
+- Nix flake (`flake.nix`) dev shell — `nix develop` provides Go 1.26, pkg-config, libusb1, and ffmpeg for a reproducible build environment
+- JS bridge download path now wraps extracted ATRAC3 frames in a proper WAVEFORMATEX container (with ATRAC3 extradata) before MP3 conversion, and automatically reconnects to the device once the bridge releases it
+
+### Changed
+- Native download path gates on confirmed device name (MZ-N505) rather than assuming all connected devices are R-series; other devices fall through to the Node.js bridge
+- Consolidated repeated S-series family checks into an `isSeriesS()` helper; removed unused `PatchBase`/`PatchControl` profile fields; sector-read fallback now reuses the R1.400 profile entry instead of a duplicate literal
+
 ## 0.5.0 — 2026-04-06
 
 ### Added
